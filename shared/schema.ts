@@ -28,6 +28,7 @@ export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 200 }).notNull(),
   sku: varchar("sku", { length: 50 }).notNull().unique(),
+  barcode: varchar("barcode", { length: 100 }).unique(),
   description: text("description"),
   minStock: integer("min_stock").notNull().default(0),
   productType: varchar("product_type", { length: 20 }).notNull().default("tangible"), // 'tangible' or 'intangible'
@@ -72,6 +73,7 @@ export const inventoryMovements = pgTable("inventory_movements", {
   movementType: varchar("movement_type", { length: 10 }).notNull(), // 'in' or 'out'
   quantity: integer("quantity").notNull(),
   appliedPrice: decimal("applied_price", { precision: 10, scale: 2 }), // Precio aplicado en el momento del movimiento
+  barcodeScanned: varchar("barcode_scanned", { length: 100 }), // Código de barras escaneado
   reason: text("reason"),
   userId: integer("user_id").notNull(),
   transferOrderId: integer("transfer_order_id"), // Vinculado a orden de traspaso si aplica
@@ -301,6 +303,11 @@ export type TransferOrderWithDetails = TransferOrder & {
 // Esquemas de validación para formularios
 export const productFormSchema = insertProductSchema.extend({
   currentPrice: z.number().min(0.01, "El precio debe ser mayor a 0"),
+  barcode: z.string().optional().refine((val) => {
+    if (!val) return true; // Barcode is optional
+    // Validate EAN-13 (13 digits) or Code 128 format
+    return /^\d{8,13}$/.test(val) || /^[A-Z0-9\-\.\/\+\%\$\#\s]+$/.test(val);
+  }, "Formato de código de barras inválido"),
 });
 
 export const warehouseEntrySchema = z.object({
@@ -331,5 +338,6 @@ export const stockEntrySchema = z.object({
   productId: z.number().min(1, "Debe seleccionar un producto"),
   quantity: z.number().min(1, "La cantidad debe ser mayor a 0"),
   serialNumbers: z.array(z.string().min(1, "El número de serie no puede estar vacío")).optional(),
+  barcodeScanned: z.string().optional(),
   reason: z.string().optional(),
 });

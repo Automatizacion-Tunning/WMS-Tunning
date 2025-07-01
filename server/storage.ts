@@ -32,6 +32,7 @@ export interface IStorage {
   // Products
   getProduct(id: number): Promise<Product | undefined>;
   getProductBySku(sku: string): Promise<Product | undefined>;
+  getProductByBarcode(barcode: string): Promise<Product | undefined>;
   getAllProducts(): Promise<ProductWithCurrentPrice[]>;
   createProduct(product: InsertProduct, currentPrice?: number): Promise<Product>;
   updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined>;
@@ -157,6 +158,11 @@ export class DatabaseStorage implements IStorage {
     return product || undefined;
   }
 
+  async getProductByBarcode(barcode: string): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.barcode, barcode));
+    return product || undefined;
+  }
+
   async getAllProducts(): Promise<ProductWithCurrentPrice[]> {
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -166,6 +172,7 @@ export class DatabaseStorage implements IStorage {
       id: products.id,
       name: products.name,
       sku: products.sku,
+      barcode: products.barcode,
       description: products.description,
       minStock: products.minStock,
       productType: products.productType,
@@ -192,6 +199,7 @@ export class DatabaseStorage implements IStorage {
       id: row.id,
       name: row.name,
       sku: row.sku,
+      barcode: row.barcode,
       description: row.description,
       minStock: row.minStock,
       productType: row.productType,
@@ -348,6 +356,7 @@ export class DatabaseStorage implements IStorage {
       movementType: inventoryMovements.movementType,
       quantity: inventoryMovements.quantity,
       appliedPrice: inventoryMovements.appliedPrice,
+      barcodeScanned: inventoryMovements.barcodeScanned,
       reason: inventoryMovements.reason,
       userId: inventoryMovements.userId,
       transferOrderId: inventoryMovements.transferOrderId,
@@ -372,6 +381,7 @@ export class DatabaseStorage implements IStorage {
       movementType: inventoryMovements.movementType,
       quantity: inventoryMovements.quantity,
       appliedPrice: inventoryMovements.appliedPrice,
+      barcodeScanned: inventoryMovements.barcodeScanned,
       reason: inventoryMovements.reason,
       userId: inventoryMovements.userId,
       transferOrderId: inventoryMovements.transferOrderId,

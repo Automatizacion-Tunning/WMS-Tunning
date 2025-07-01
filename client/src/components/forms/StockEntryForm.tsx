@@ -11,8 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { stockEntrySchema, type Product } from "@shared/schema";
+import BarcodeScanner from "@/components/ui/barcode-scanner";
 import { z } from "zod";
-import { Plus, X } from "lucide-react";
+import { Plus, X, QrCode } from "lucide-react";
 
 type StockEntryData = z.infer<typeof stockEntrySchema>;
 
@@ -26,6 +27,8 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
   const queryClient = useQueryClient();
   const [serialNumbers, setSerialNumbers] = useState<string[]>([]);
   const [serialInput, setSerialInput] = useState("");
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [barcodeScanned, setBarcodeScanned] = useState<string>("");
 
   const { data: products = [] } = useQuery<Product[]>({
     queryKey: ["/api/products"],
@@ -52,6 +55,7 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
       const response = await apiRequest("POST", "/api/stock-entry", {
         ...data,
         serialNumbers: requiresSerial ? serialNumbers : undefined,
+        barcodeScanned: barcodeScanned || undefined,
       });
       return response.json();
     },
@@ -73,6 +77,29 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
       });
     },
   });
+
+  const handleBarcodeScanned = async (barcode: string) => {
+    setBarcodeScanned(barcode);
+    
+    try {
+      const response = await apiRequest("GET", `/api/products/barcode/${encodeURIComponent(barcode)}`);
+      const product = await response.json();
+      
+      if (product) {
+        form.setValue("productId", product.id);
+        toast({
+          title: "Producto encontrado",
+          description: `${product.name} - SKU: ${product.sku}`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Producto no encontrado",
+        description: "No se encontró un producto con ese código de barras.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const addSerialNumber = () => {
     if (serialInput.trim() && !serialNumbers.includes(serialInput.trim())) {
@@ -100,7 +127,8 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
   };
 
   return (
-    <Form {...form}>
+    <>
+      <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
           <h3 className="text-lg font-semibold">Ingreso de Stock Inicial</h3>
@@ -115,37 +143,53 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
           render={({ field }) => (
             <FormItem>
               <FormLabel>Producto</FormLabel>
-              <Select
-                onValueChange={(value) => {
-                  field.onChange(parseInt(value));
-                  // Reset serial numbers when product changes
-                  setSerialNumbers([]);
-                }}
-                value={field.value?.toString()}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar producto" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {products.map((product) => (
-                    <SelectItem key={product.id} value={product.id.toString()}>
-                      <div className="flex items-center gap-2">
-                        <span>{product.name}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {product.sku}
-                        </Badge>
-                        {product.requiresSerial && (
-                          <Badge variant="secondary" className="text-xs">
-                            Requiere Serie
+              <div className="flex gap-2">
+                <Select
+                  onValueChange={(value) => {
+                    field.onChange(parseInt(value));
+                    // Reset serial numbers when product changes
+                    setSerialNumbers([]);
+                  }}
+                  value={field.value?.toString()}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar producto" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {products.map((product) => (
+                      <SelectItem key={product.id} value={product.id.toString()}>
+                        <div className="flex items-center gap-2">
+                          <span>{product.name}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {product.sku}
                           </Badge>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                          {product.requiresSerial && (
+                            <Badge variant="secondary" className="text-xs">
+                              Requiere Serie
+                            </Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setIsScannerOpen(true)}
+                  className="shrink-0"
+                >
+                  <QrCode className="w-4 h-4" />
+                </Button>
+              </div>
+              {barcodeScanned && (
+                <div className="text-sm text-muted-foreground">
+                  Código escaneado: {barcodeScanned}
+                </div>
+              )}
               <FormMessage />
             </FormItem>
           )}
@@ -258,5 +302,14 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
         </div>
       </form>
     </Form>
+
+    <BarcodeScanner
+      isOpen={isScannerOpen}
+      onClose={() => setIsScannerOpen(false)}
+      onScan={handleBarcodeScanned}
+      title="Escanear Producto"
+      description="Apunta la cámara hacia el código de barras del producto para seleccionarlo automáticamente"
+    />
+    </>
   );
 }

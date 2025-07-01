@@ -166,6 +166,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Search product by barcode
+  app.get("/api/products/barcode/:barcode", async (req, res) => {
+    try {
+      const product = await storage.getProductByBarcode(req.params.barcode);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found with this barcode" });
+      }
+      res.json(product);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to search product by barcode" });
+    }
+  });
+
   // Inventory routes
   app.get("/api/inventory", async (req, res) => {
     try {

@@ -1,0 +1,172 @@
+Contexto
+Vas a extender una aplicación de gestión de inventarios que ya está corriendo en Replit y también es usada desde el navegador de dispositivos móviles (no se trata de una app nativa). Ahora se requiere soporte de lectura de código de barras vía cámara del celular para agilizar los ingresos y traspasos de stock.
+
+1. Ajustes al modelo de datos
+Producto
+
+Añadir campo barcode (string único).
+
+Verificar que sku siga siendo único; el barcode puede servir de búsqueda alternativa.
+
+Mantener campos existentes:
+
+preciosMensuales: [ { mes: "YYYY-MM", precio: Number } ]
+
+tipo: enum "Tangible" / "Intangible"
+
+requiereSerial: Boolean
+
+Inventario
+
+Confirmar referencia por productoId o sku.
+
+Campos: bodega, fecha, cantidad, precioAplicado, seriales?, barcodeEscaneado? (string, opcional).
+
+Órdenes de traspaso
+
+Igual que antes: ordenId, sku, cantidad, bodegaOrigen, bodegaDestino, centroCostos, solicitanteId, estado, jefeProyectoId, timestamps.
+
+2. Lógica de negocio
+Ingreso inicial a Bodega Principal
+
+Forzar bodega = "Principal".
+
+Determinar precioAplicado según preciosMensuales del mes actual.
+
+Si requiereSerial = true, solicitar seriales uno a uno.
+
+Nueva: permitir capturar el barcodeEscaneado (o escribir/pegar el código de barras) y mapear al sku correspondiente.
+
+Solicitud de traspaso
+
+Igual que antes: crear orden en Pendiente y notificar al Jefe de Proyectos.
+
+Opción de escaneo: al seleccionar producto, el usuario puede usar cámara para escanear el barcode y autocompletar SKU.
+
+Aprobación y ejecución
+
+El flujo de aprobación y movimiento de stock permanece igual, sin cambios.
+
+3. Actualización de pantallas y rutas
+Productos → Ficha (edit)
+
+Mostrar/editar nuevo campo Código de Barras.
+
+Validar unicidad y formato EAN-13 / Code128 (según especificación).
+
+Inventario → Ingreso
+
+Botón “Escanear código” que active la cámara del navegador en móviles (getUserMedia / librería de scanner).
+
+Al leer el barcode, autocompletar SKU y descripción.
+
+Campos obligatorios: cantidad, seriales (si aplica).
+
+Mostrar el barcode recién leído opcionalmente.
+
+Inventario → Traspaso
+
+Igual que antes, pero con botón “Escanear código” para elegir producto.
+
+Órdenes de Trabajo
+
+Sin cambios en la lista; mantener botones “Aprobar”/“Rechazar”.
+
+4. Soporte móvil y cámara
+Integrar librería de escaneo JS (por ejemplo, QuaggaJS, html5-qrcode u otra ligera) en las pantallas de Ingreso y Traspaso.
+
+Detectar automáticamente si el navegador soporta cámara; en caso contrario, ocultar el botón y permitir ingreso manual de barcode.
+
+Asegurar permisos HTTPS en Replit (usar TLS) para acceso a getUserMedia.
+
+UX:
+
+Usuario presiona “Escanear” → se abre vista de cámara full-screen.
+
+Al detectar el código, se cierra la vista y se retorna el valor al formulario.
+
+5. Roles y permisos
+Usuario Operativo:
+
+Puede usar la cámara para escanear en ingresos y traspasos.
+
+No puede aprobar órdenes.
+
+Jefe de Proyectos:
+
+Igual permiso de escaneo si solicita traspasos.
+
+Puede aprobar/rechazar.
+
+6. Validaciones y migraciones
+Migración de productos existentes:
+
+Asignar barcode = "" o null hasta que se capture uno nuevo.
+
+Validar en front-end y back-end:
+
+Formato de código de barras.
+
+Cantidad > 0; precio ≥ 0.
+
+Si requiereSerial, forzar captura de seriales uno a uno.
+
+Verificar disponibilidad de stock antes de crear traspaso.
+
+7. Ejemplos JSON actualizados
+jsonc
+Copiar
+Editar
+// Ficha de producto con barcode
+{
+  "sku": "PRD-001",
+  "barcode": "1234567890123",
+  "descripcion": "Motor eléctrico 5HP",
+  "preciosMensuales": [
+    { "mes": "2025-01", "precio": 120.50 },
+    { "mes": "2025-02", "precio": 125.00 }
+  ],
+  "tipo": "Tangible",
+  "requiereSerial": true
+}
+
+// Ingreso escaneado a bodega Principal
+{
+  "sku": "PRD-001",
+  "barcodeEscaneado": "1234567890123",
+  "bodega": "Principal",
+  "fecha": "2025-07-01",
+  "cantidad": 10,
+  "seriales": ["SN202507A01", "SN202507A02", /*…*/]
+}
+
+// Solicitud de traspaso con escaneo
+{
+  "ordenId": "OT-678",
+  "sku": "PRD-002",
+  "barcodeEscaneado": "9876543210987",
+  "cantidad": 3,
+  "bodegaOrigen": "Principal",
+  "bodegaDestino": "Bodega Secundaria",
+  "centroCostos": "CC-03",
+  "solicitanteId": "u123",
+  "estado": "Pendiente",
+  "jefeProyectoId": "jperez@empresa.com",
+  "createdAt": "2025-07-01T10:15:00Z"
+}
+8. Entregables
+Migraciones de BD para el campo barcode.
+
+Parche de back-end: inclusión de barcode en APIs y validaciones.
+
+Parches de front-end:
+
+Formularios actualizados con botón de escaneo y manejo de getUserMedia.
+
+Manejo de errores de cámara y fallback manual.
+
+Documentación de despliegue en Replit (asegurar HTTPS, variables de entorno si aplica).
+
+Mockups o capturas de pantallas nuevas/actualizadas (web y móvil).
+
+Con estos detalles, Replit Agent podrá modificar la app existente, añadiendo soporte de código de barras móvil y asegurando la continuidad de la lógica previa.
