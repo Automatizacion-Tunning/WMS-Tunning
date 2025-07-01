@@ -1,53 +1,23 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Package, Clock, Settings } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import NewProductForm from "@/components/forms/NewProductForm";
+import SimpleProductForm from "@/components/forms/SimpleProductForm";
 import { type ProductWithCurrentPrice } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ProductManagement() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductWithCurrentPrice | null>(null);
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   const { data: products = [], isLoading } = useQuery<ProductWithCurrentPrice[]>({
     queryKey: ["/api/products"],
   });
 
-  const createProductMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await fetch("/api/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        throw new Error("Error al crear el producto");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      setIsCreateDialogOpen(false);
-      toast({
-        title: "Producto creado",
-        description: "El producto ha sido creado exitosamente",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "No se pudo crear el producto",
-        variant: "destructive",
-      });
-    },
-  });
+
 
   const formatPrice = (price: string | undefined) => {
     if (!price) return "Sin precio";
@@ -66,8 +36,8 @@ export default function ProductManagement() {
     return type === "tangible" ? "default" : "secondary";
   };
 
-  const handleCreateProduct = (data: any) => {
-    createProductMutation.mutate(data);
+  const handleCreateProduct = () => {
+    setIsCreateDialogOpen(false);
   };
 
   if (isLoading) {
@@ -111,7 +81,7 @@ export default function ProductManagement() {
                 Complete la información del producto y establezca el precio inicial
               </DialogDescription>
             </DialogHeader>
-            <NewProductForm 
+            <SimpleProductForm 
               onSuccess={handleCreateProduct}
               onCancel={() => setIsCreateDialogOpen(false)}
             />
