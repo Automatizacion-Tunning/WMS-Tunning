@@ -42,9 +42,13 @@ export default function AssociateProductModal({
 
   const associateMutation = useMutation({
     mutationFn: async (productId: number) => {
+      console.log("🔗 Asociando código:", barcode, "a producto:", productId);
+      const requestBody = { barcode };
+      console.log("📤 Enviando:", requestBody);
+      
       const response = await fetch(`/api/products/${productId}/barcode`, {
         method: "PUT",
-        body: JSON.stringify({ barcode }),
+        body: JSON.stringify(requestBody),
         headers: { "Content-Type": "application/json" }
       });
       

@@ -9,13 +9,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Edit, Trash2, Package } from "lucide-react";
 import SimpleProductForm from "@/components/forms/SimpleProductForm";
 import EditProductForm from "@/components/forms/EditProductForm";
-import type { Product } from "@shared/schema";
+import type { Product, ProductWithCurrentPrice } from "@shared/schema";
 
 export default function ProductDetails() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
-  const { data: products, isLoading } = useQuery({
+  const { data: products, isLoading } = useQuery<ProductWithCurrentPrice[]>({
     queryKey: ["/api/products"],
   });
 
@@ -78,6 +78,7 @@ export default function ProductDetails() {
                 <TableRow>
                   <TableHead>Producto</TableHead>
                   <TableHead>SKU</TableHead>
+                  <TableHead>Código de Barras</TableHead>
                   <TableHead>Precio</TableHead>
                   <TableHead>Stock Mínimo</TableHead>
                   <TableHead>Estado</TableHead>
@@ -106,7 +107,16 @@ export default function ProductDetails() {
                       {product.sku}
                     </TableCell>
                     <TableCell className="text-sm">
-                      {product.price ? formatCurrency(product.price) : "-"}
+                      {product.barcode ? (
+                        <Badge variant="outline" className="font-mono text-xs">
+                          {product.barcode}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">Sin código</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {product.currentPrice?.price ? formatCurrency(product.currentPrice.price) : "-"}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {product.minStock} unidades
