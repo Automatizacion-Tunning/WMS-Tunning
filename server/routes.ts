@@ -155,8 +155,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertProductSchema.partial().parse(req.body);
       
-      // Si se está actualizando el código de barras, verificar que no esté en uso
-      if (validatedData.barcode) {
+      // Normalizar código de barras vacío a null
+      if (typeof validatedData.barcode === "string" && validatedData.barcode.trim() === "") {
+        validatedData.barcode = null;
+      }
+      
+      // Si se está actualizando el código de barras con un valor no vacío, verificar que no esté en uso
+      if (validatedData.barcode && validatedData.barcode.trim() !== "") {
         const existingProduct = await storage.getProductByBarcode(validatedData.barcode);
         if (existingProduct && existingProduct.id !== parseInt(req.params.id)) {
           return res.status(409).json({ 
