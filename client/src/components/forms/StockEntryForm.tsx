@@ -143,47 +143,68 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
           render={({ field }) => (
             <FormItem>
               <FormLabel>Producto</FormLabel>
-              <div className="flex gap-2">
-                <Select
-                  onValueChange={(value) => {
-                    field.onChange(parseInt(value));
-                    // Reset serial numbers when product changes
-                    setSerialNumbers([]);
-                  }}
-                  value={field.value?.toString()}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar producto" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {products.map((product) => (
-                      <SelectItem key={product.id} value={product.id.toString()}>
-                        <div className="flex items-center gap-2">
-                          <span>{product.name}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {product.sku}
-                          </Badge>
-                          {product.requiresSerial && (
-                            <Badge variant="secondary" className="text-xs">
-                              Requiere Serie
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Select
+                    onValueChange={(value) => {
+                      field.onChange(parseInt(value));
+                      // Reset serial numbers when product changes
+                      setSerialNumbers([]);
+                    }}
+                    value={field.value?.toString()}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar producto" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {products.map((product) => (
+                        <SelectItem key={product.id} value={product.id.toString()}>
+                          <div className="flex items-center gap-2">
+                            <span>{product.name}</span>
+                            <Badge variant="outline" className="text-xs">
+                              {product.sku}
                             </Badge>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setIsScannerOpen(true)}
-                  className="shrink-0"
-                >
-                  <QrCode className="w-4 h-4" />
-                </Button>
+                            {product.requiresSerial && (
+                              <Badge variant="secondary" className="text-xs">
+                                Requiere Serie
+                              </Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsScannerOpen(true)}
+                    className="shrink-0"
+                    title="Escanear código de barras"
+                  >
+                    <QrCode className="w-4 h-4" />
+                  </Button>
+                </div>
+                
+                {/* Campo manual para código de barras */}
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="O ingrese el código de barras manualmente"
+                    value={barcodeScanned}
+                    onChange={(e) => setBarcodeScanned(e.target.value)}
+                    className="font-mono"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleBarcodeScanned(barcodeScanned)}
+                    disabled={!barcodeScanned.trim()}
+                  >
+                    Buscar
+                  </Button>
+                </div>
               </div>
               {barcodeScanned && (
                 <div className="text-sm text-muted-foreground">

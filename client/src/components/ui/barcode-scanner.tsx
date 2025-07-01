@@ -41,10 +41,13 @@ export default function BarcodeScanner({
     }
   }, []);
 
-  const initializeScanner = useCallback(() => {
+  const initializeScanner = useCallback(async () => {
     if (!isOpen || scannerRef.current) return;
 
     try {
+      // Verificar permisos de cámara antes de inicializar
+      await navigator.mediaDevices.getUserMedia({ video: true });
+      
       const scanner = new Html5QrcodeScanner(
         "barcode-scanner-container",
         {
@@ -63,17 +66,26 @@ export default function BarcodeScanner({
           supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
           showTorchButtonIfSupported: true,
           showZoomSliderIfSupported: true,
+          rememberLastUsedCamera: true,
         },
         false
       );
 
-      scanner.render(handleScanSuccess, handleScanError);
+      await scanner.render(handleScanSuccess, handleScanError);
       scannerRef.current = scanner;
       setIsScanning(true);
       setError(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error initializing scanner:", err);
-      setError("No se pudo acceder a la cámara. Verifique los permisos.");
+      if (err.name === 'NotAllowedError') {
+        setError("Acceso a la cámara denegado. Por favor, permita el acceso a la cámara y recargue la página.");
+      } else if (err.name === 'NotFoundError') {
+        setError("No se encontró ninguna cámara en el dispositivo.");
+      } else if (err.name === 'NotSupportedError') {
+        setError("El navegador no soporta el acceso a la cámara.");
+      } else {
+        setError(`Error al acceder a la cámara: ${err.message || 'Error desconocido'}`);
+      }
       setHasCamera(false);
     }
   }, [isOpen, handleScanSuccess, handleScanError]);
@@ -105,8 +117,10 @@ export default function BarcodeScanner({
   // Inicializar scanner cuando se abre el diálogo
   useEffect(() => {
     if (isOpen && hasCamera) {
-      // Pequeño delay para asegurar que el DOM esté listo
-      const timer = setTimeout(initializeScanner, 100);
+      // Delay más largo para asegurar que el DOM esté completamente listo
+      const timer = setTimeout(() => {
+        initializeScanner().catch(console.error);
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [isOpen, hasCamera, initializeScanner]);
@@ -149,7 +163,10 @@ export default function BarcodeScanner({
               <CameraOff className="w-12 h-12 mx-auto text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">
-                  Cámara no disponible. Puede ingresar el código manualmente.
+                  Cámara no disponible en este dispositivo.
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Puede cerrar este diálogo e ingresar el código de barras manualmente en el campo de texto.
                 </p>
               </div>
             </div>
