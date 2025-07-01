@@ -19,6 +19,7 @@ export const warehouses = pgTable("warehouses", {
   costCenter: varchar("cost_center", { length: 100 }).notNull(),
   parentWarehouseId: integer("parent_warehouse_id"),
   warehouseType: varchar("warehouse_type", { length: 50 }).notNull().default('sub'), // 'main' or 'sub'
+  subWarehouseType: varchar("sub_warehouse_type", { length: 50 }), // 'um2', 'plataforma', 'pem', 'integrador' for sub-warehouses
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

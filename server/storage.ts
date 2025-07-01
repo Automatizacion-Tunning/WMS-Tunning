@@ -53,6 +53,9 @@ export interface IStorage {
     lowStockCount: number;
     totalInventoryValue: number;
   }>;
+
+  // Cost Center operations
+  createCostCenter(costCenter: string, location?: string): Promise<Warehouse[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -325,6 +328,47 @@ export class DatabaseStorage implements IStorage {
       lowStockCount: lowStock.length,
       totalInventoryValue: Number(inventoryValue.total) || 0,
     };
+  }
+
+  async createCostCenter(costCenter: string, location?: string): Promise<Warehouse[]> {
+    try {
+      // Create main warehouse
+      const [mainWarehouse] = await db
+        .insert(warehouses)
+        .values({
+          name: `Bodega Principal ${costCenter}`,
+          location: location || `Ubicación Central ${costCenter}`,
+          costCenter: costCenter,
+          parentWarehouseId: null,
+          warehouseType: 'main',
+          subWarehouseType: null,
+          isActive: true,
+        })
+        .returning();
+
+      // Create sub-warehouses
+      const subWarehouseTypes = ['um2', 'plataforma', 'pem', 'integrador'];
+      const subWarehouseNames = ['UM2', 'Plataforma', 'PEM', 'Integrador'];
+      
+      const subWarehouses = await db
+        .insert(warehouses)
+        .values(
+          subWarehouseTypes.map((type, index) => ({
+            name: `Bodega ${subWarehouseNames[index]} ${costCenter}`,
+            location: `Área ${subWarehouseNames[index]} - ${costCenter}`,
+            costCenter: costCenter,
+            parentWarehouseId: mainWarehouse.id,
+            warehouseType: 'sub',
+            subWarehouseType: type,
+            isActive: true,
+          }))
+        )
+        .returning();
+
+      return [mainWarehouse, ...subWarehouses];
+    } catch (error) {
+      throw new Error(`Failed to create cost center: ${error}`);
+    }
   }
 }
 

@@ -18,9 +18,17 @@ interface WarehouseFormProps {
   onSuccess?: () => void;
 }
 
+const costCenterFormSchema = z.object({
+  costCenter: z.string().min(1, "Centro de costos es requerido"),
+  location: z.string().optional(),
+});
+
+type CostCenterFormData = z.infer<typeof costCenterFormSchema>;
+
 export default function WarehouseForm({ onSuccess }: WarehouseFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [isCreatingCostCenter, setIsCreatingCostCenter] = useState(false);
 
   // Obtener lista de bodegas para la selección de bodega padre
   const { data: warehouses } = useQuery<Warehouse[]>({

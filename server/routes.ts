@@ -92,6 +92,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create complete cost center with all warehouses
+  app.post("/api/cost-centers", async (req, res) => {
+    try {
+      const { costCenter, location } = req.body;
+      
+      if (!costCenter) {
+        return res.status(400).json({ message: "Cost center is required" });
+      }
+
+      const warehouses = await storage.createCostCenter(costCenter, location);
+      res.status(201).json(warehouses);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create cost center" });
+    }
+  });
+
   // Product routes
   app.get("/api/products", async (req, res) => {
     try {

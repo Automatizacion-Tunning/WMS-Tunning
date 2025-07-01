@@ -8,6 +8,7 @@ import Layout from "@/components/layout/Layout";
 import Dashboard from "@/pages/Dashboard";
 import WarehouseManagement from "@/pages/warehouses/WarehouseManagement";
 import WarehouseDetails from "@/pages/warehouses/WarehouseDetails";
+import CostCenterManagement from "@/pages/warehouses/CostCenterManagement";
 import ProductDetails from "@/pages/products/ProductDetails";
 import ProductMovements from "@/pages/products/ProductMovements";
 import UserList from "@/pages/users/UserList";
@@ -20,6 +21,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/warehouses" component={WarehouseManagement} />
         <Route path="/warehouses/:id" component={WarehouseDetails} />
+        <Route path="/cost-centers" component={CostCenterManagement} />
         <Route path="/products" component={ProductDetails} />
         <Route path="/products/movements" component={ProductMovements} />
         <Route path="/users" component={UserList} />

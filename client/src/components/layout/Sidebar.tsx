@@ -9,7 +9,8 @@ import {
   Shield, 
   Warehouse, 
   User,
-  LogOut
+  LogOut,
+  Building2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,7 @@ const navigation = [
 ];
 
 const warehouseNavigation = [
+  { name: "Centros de Costos", href: "/cost-centers", icon: Building2 },
   { name: "Administración", href: "/warehouses", icon: Settings },
   { name: "Ficha", href: "/warehouses/details", icon: FileText },
 ];
