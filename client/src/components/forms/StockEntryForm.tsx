@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { stockEntrySchema, type Product } from "@shared/schema";
+import { warehouseEntrySchema, type Product } from "@shared/schema";
 import BarcodeScannerNative from "@/components/ui/barcode-scanner-native";
 import ProductNotFoundModal from "@/components/modals/ProductNotFoundModal";
 import AssociateProductModal from "@/components/modals/AssociateProductModal";
@@ -19,7 +19,7 @@ import { useBarcodeFlow } from "@/hooks/useBarcodeFlow";
 import { z } from "zod";
 import { Plus, X, QrCode, Scan, Package } from "lucide-react";
 
-type StockEntryData = z.infer<typeof stockEntrySchema>;
+type StockEntryData = z.infer<typeof warehouseEntrySchema>;
 
 interface StockEntryFormProps {
   onSuccess?: () => void;
@@ -40,10 +40,11 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
   });
 
   const form = useForm<StockEntryData>({
-    resolver: zodResolver(stockEntrySchema),
+    resolver: zodResolver(warehouseEntrySchema),
     defaultValues: {
       productId: 0,
       quantity: 1,
+      price: 0,
       serialNumbers: [],
       reason: "",
     },
@@ -269,6 +270,49 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
                   }}
                 />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="price"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Precio (CLP) *</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="0.00"
+                  inputMode="decimal"
+                  pattern="[0-9]*[.,]?[0-9]*"
+                  {...field}
+                  value={field.value || ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === "") {
+                      field.onChange("");
+                      return;
+                    }
+                    
+                    const numValue = Number(value);
+                    if (!isNaN(numValue) && numValue >= 0) {
+                      field.onChange(numValue);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    if (!e.target.value || Number(e.target.value) <= 0) {
+                      field.onChange(0.01);
+                    }
+                  }}
+                />
+              </FormControl>
+              <FormDescription>
+                Precio unitario en pesos chilenos para este ingreso
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}

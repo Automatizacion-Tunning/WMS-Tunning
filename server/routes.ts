@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { 
   insertUserSchema, insertWarehouseSchema, insertProductSchema, 
   insertInventoryMovementSchema, insertTransferOrderSchema,
-  transferRequestSchema, stockEntrySchema
+  transferRequestSchema, stockEntrySchema, warehouseEntrySchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -421,7 +421,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stock Entry routes (for initial product stock to principal warehouse)
   app.post("/api/stock-entry", async (req, res) => {
     try {
-      const validatedData = stockEntrySchema.parse(req.body);
+      const validatedData = warehouseEntrySchema.parse(req.body);
       
       // Get the product to check if it requires serial numbers
       const product = await storage.getProduct(validatedData.productId);
@@ -445,19 +445,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No principal warehouse found" });
       }
 
-      // Get current price for the product
-      const currentDate = new Date();
-      const currentPrice = await storage.getCurrentProductPrice(validatedData.productId);
-      const appliedPrice = currentPrice?.price ? parseFloat(currentPrice.price) : 0;
+      // Use the price provided in the form for this specific entry
+      const appliedPrice = validatedData.price;
 
-      // Create inventory movement
+      // Create inventory movement with the provided price
       const movement = await storage.createInventoryMovement({
         productId: validatedData.productId,
-        warehouseId: principalWarehouse.id,
+        warehouseId: validatedData.warehouseId,
         movementType: 'in',
         quantity: validatedData.quantity,
         appliedPrice: appliedPrice.toString(),
-        reason: validatedData.reason || 'Ingreso inicial a bodega principal',
+        reason: validatedData.reason || 'Ingreso de stock',
         userId: 1, // TODO: Get from auth context
       });
 
