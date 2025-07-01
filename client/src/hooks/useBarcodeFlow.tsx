@@ -40,17 +40,21 @@ export function useBarcodeFlow(): UseBarcodeFlowReturn {
     queryKey: ["/api/products", "barcode", barcode],
     queryFn: async () => {
       console.log("🔍 Buscando producto con código:", barcode);
+      console.log("🔍 Estado actual:", state);
+      
       const response = await fetch(`/api/products?barcode=${encodeURIComponent(barcode!)}`);
       
       console.log("📡 Respuesta del servidor:", response.status);
       
       if (response.status === 404) {
         console.log("❌ Producto no encontrado");
+        setProduct(null);
         setState("product-not-found");
         return null;
       }
       
       if (!response.ok) {
+        console.log("❌ Error en la respuesta:", response.statusText);
         throw new Error('Error al buscar producto');
       }
       
@@ -62,7 +66,8 @@ export function useBarcodeFlow(): UseBarcodeFlowReturn {
     },
     enabled: !!barcode && state === "searching",
     retry: false,
-    staleTime: 0, // No usar caché para búsquedas de códigos de barras
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const startScanning = useCallback(() => {
@@ -74,11 +79,13 @@ export function useBarcodeFlow(): UseBarcodeFlowReturn {
 
   const handleBarcodeScanned = useCallback((scannedBarcode: string) => {
     console.log("📱 Código escaneado recibido:", scannedBarcode);
+    console.log("📱 Estado antes de cambiar:", state);
     setBarcode(scannedBarcode);
     setState("searching");
     setError(null);
     setProduct(null);
-  }, []);
+    console.log("📱 Estado después de cambiar: searching");
+  }, [state]);
 
   const handleCreateNew = useCallback(() => {
     setState("creating-new");
@@ -111,6 +118,11 @@ export function useBarcodeFlow(): UseBarcodeFlowReturn {
     setProduct(null);
     setError(null);
   }, []);
+
+  // Debug effect para monitorear cambios de estado
+  useEffect(() => {
+    console.log("🔄 Estado cambió a:", state, "| Código:", barcode);
+  }, [state, barcode]);
 
   return {
     state,
