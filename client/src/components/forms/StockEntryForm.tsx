@@ -85,6 +85,7 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
 
   // Manejadores del flujo de códigos de barras
   const handleBarcodeScanned = (barcode: string) => {
+    console.log("🎯 Formulario recibió código:", barcode);
     barcodeFlow.handleBarcodeScanned(barcode);
   };
 

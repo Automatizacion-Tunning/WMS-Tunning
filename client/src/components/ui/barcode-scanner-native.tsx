@@ -77,6 +77,7 @@ export default function BarcodeScannerNative({
           if (result) {
             // Código detectado exitosamente
             console.log('Código detectado:', result.getText());
+            console.log('🔥 Llamando onScan con código:', result.getText());
             onScan(result.getText());
             stopCamera();
             onClose();
