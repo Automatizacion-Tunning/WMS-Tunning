@@ -120,4 +120,5 @@ Changelog:
 
 ```
 Preferred communication style: Simple, everyday language.
+Currency: Chilean Peso (CLP) - Updated system to use CLP formatting and pricing.
 ```

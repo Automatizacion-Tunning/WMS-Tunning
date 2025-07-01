@@ -38,9 +38,9 @@ export default function ProductDetails() {
 
   const formatCurrency = (value: string) => {
     const num = parseFloat(value);
-    return new Intl.NumberFormat('es-ES', {
+    return new Intl.NumberFormat('es-CL', {
       style: 'currency',
-      currency: 'EUR'
+      currency: 'CLP'
     }).format(num);
   };
 

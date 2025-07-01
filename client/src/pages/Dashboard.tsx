@@ -35,9 +35,9 @@ export default function Dashboard() {
   });
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-ES', {
+    return new Intl.NumberFormat('es-CL', {
       style: 'currency',
-      currency: 'EUR'
+      currency: 'CLP'
     }).format(value);
   };
 
