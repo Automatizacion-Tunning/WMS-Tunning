@@ -76,11 +76,18 @@ export default function BarcodeScannerNative({
         (result, err) => {
           if (result) {
             // Código detectado exitosamente
-            console.log('Código detectado:', result.getText());
-            console.log('🔥 Llamando onScan con código:', result.getText());
-            onScan(result.getText());
-            stopCamera();
-            onClose();
+            const detectedCode = result.getText();
+            console.log('Código detectado:', detectedCode);
+            console.log('🔥 Llamando onScan con código:', detectedCode);
+            
+            // Llamar primero onScan, luego cerrar
+            onScan(detectedCode);
+            
+            // Dar un pequeño delay antes de cerrar para asegurar que se procese
+            setTimeout(() => {
+              stopCamera();
+              onClose();
+            }, 100);
           }
           if (err && !(err.name === 'NotFoundException')) {
             // Solo mostrar errores que no sean "código no encontrado"
