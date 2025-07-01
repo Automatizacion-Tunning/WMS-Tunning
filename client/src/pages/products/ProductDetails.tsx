@@ -8,10 +8,12 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Edit, Trash2, Package } from "lucide-react";
 import SimpleProductForm from "@/components/forms/SimpleProductForm";
+import EditProductForm from "@/components/forms/EditProductForm";
 import type { Product } from "@shared/schema";
 
 export default function ProductDetails() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   const { data: products, isLoading } = useQuery({
     queryKey: ["/api/products"],
@@ -116,7 +118,12 @@ export default function ProductDetails() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8"
+                          onClick={() => setEditingProduct(product)}
+                        >
                           <Edit className="w-3 h-3" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
@@ -131,6 +138,19 @@ export default function ProductDetails() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit Product Dialog */}
+      {editingProduct && (
+        <Dialog open={true} onOpenChange={() => setEditingProduct(null)}>
+          <DialogContent className="max-w-md">
+            <EditProductForm 
+              product={editingProduct}
+              onSuccess={() => setEditingProduct(null)}
+              onCancel={() => setEditingProduct(null)}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
