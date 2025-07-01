@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Camera, CameraOff, X } from "lucide-react";
+import { BrowserMultiFormatReader } from '@zxing/library';
 
 interface BarcodeScannerProps {
   isOpen: boolean;
@@ -21,40 +22,75 @@ export default function BarcodeScannerNative({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasCamera, setHasCamera] = useState(true);
+  const [scanningDevice, setScanningDevice] = useState<string | null>(null);
 
   const stopCamera = useCallback(() => {
+    if (readerRef.current) {
+      readerRef.current.reset();
+      readerRef.current = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
     setIsScanning(false);
+    setScanningDevice(null);
   }, []);
 
   const startCamera = useCallback(async () => {
     try {
       setError(null);
       
-      // Solicitar acceso a la cámara trasera si está disponible
-      const constraints = {
-        video: {
-          facingMode: { ideal: 'environment' }, // Cámara trasera
-          width: { ideal: 640 },
-          height: { ideal: 480 }
-        }
-      };
+      // Inicializar el lector ZXing
+      const codeReader = new BrowserMultiFormatReader();
+      readerRef.current = codeReader;
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamRef.current = stream;
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        setIsScanning(true);
-        setHasCamera(true);
+      // Obtener dispositivos de video disponibles
+      const videoInputDevices = await codeReader.listVideoInputDevices();
+      
+      if (videoInputDevices.length === 0) {
+        throw new Error('No se encontró ninguna cámara');
       }
+
+      // Preferir cámara trasera si está disponible
+      let selectedDevice = videoInputDevices[0];
+      for (const device of videoInputDevices) {
+        if (device.label.toLowerCase().includes('back') || 
+            device.label.toLowerCase().includes('rear') ||
+            device.label.toLowerCase().includes('environment')) {
+          selectedDevice = device;
+          break;
+        }
+      }
+
+      setScanningDevice(selectedDevice.deviceId);
+
+      // Iniciar el escaneo
+      await codeReader.decodeFromVideoDevice(
+        selectedDevice.deviceId,
+        videoRef.current!,
+        (result, err) => {
+          if (result) {
+            // Código detectado exitosamente
+            console.log('Código detectado:', result.getText());
+            onScan(result.getText());
+            stopCamera();
+            onClose();
+          }
+          if (err && !(err.name === 'NotFoundException')) {
+            // Solo mostrar errores que no sean "código no encontrado"
+            console.warn('Error de escaneo:', err);
+          }
+        }
+      );
+
+      setIsScanning(true);
+      setHasCamera(true);
+      
     } catch (err: any) {
       console.error("Error accessing camera:", err);
       setHasCamera(false);
@@ -69,26 +105,9 @@ export default function BarcodeScannerNative({
         setError(`Error al acceder a la cámara: ${err.message || 'Error desconocido'}`);
       }
     }
-  }, []);
+  }, [onScan, onClose, stopCamera]);
 
-  // Simulación básica de detección de código de barras
-  // En una implementación real, usarías una librería como ZXing o QuaggaJS
-  const captureFrame = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current || !isScanning) return;
 
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    const ctx = canvas.getContext('2d');
-
-    if (!ctx) return;
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
-
-    // Aquí normalmente procesarías la imagen para detectar códigos de barras
-    // Por ahora, simularemos con un botón manual
-  }, [isScanning]);
 
   // Verificar soporte de cámara
   useEffect(() => {
