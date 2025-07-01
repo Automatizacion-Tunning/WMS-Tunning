@@ -27,8 +27,11 @@ export default function AssociateProductModal({
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
 
-  // Debug log para verificar el código recibido
+  // Debug logs para verificar el código recibido
   console.log("🔗 Modal recibió código:", barcode);
+  console.log("🔗 Tipo de código:", typeof barcode);
+  console.log("🔗 Longitud código:", barcode?.length);
+  console.log("🔗 Código vacío?:", !barcode || barcode.trim() === "");
 
   // Obtener productos sin código de barras
   const { data: allProducts = [], isLoading } = useQuery({
@@ -46,13 +49,14 @@ export default function AssociateProductModal({
   const associateMutation = useMutation({
     mutationFn: async (productId: number) => {
       console.log("🔗 Asociando código:", barcode, "a producto:", productId);
+      console.log("🔍 Tipo de barcode:", typeof barcode, "valor:", barcode);
       
       // Verificar que el código no esté vacío
-      if (!barcode) {
-        throw new Error("Código de barras requerido");
+      if (!barcode || barcode.trim() === "") {
+        throw new Error("Código de barras requerido para asociar");
       }
       
-      const requestBody = { barcode };
+      const requestBody = { barcode: barcode.trim() };
       console.log("📤 Enviando:", requestBody);
       
       const response = await fetch(`/api/products/${productId}/barcode`, {
