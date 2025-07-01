@@ -13,9 +13,12 @@ import {
   Building2,
   Package,
   ArrowUpCircle,
-  RefreshCcw
+  RefreshCcw,
+  Menu
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: ChartPie },
@@ -46,7 +49,8 @@ const userNavigation = [
   { name: "Permisos", href: "/users/permissions", icon: Shield },
 ];
 
-export default function Sidebar() {
+// Contenido del sidebar (compartido entre desktop y móvil)
+function SidebarContent() {
   const [location] = useLocation();
 
   const isActive = (href: string) => {
@@ -57,7 +61,7 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-60 bg-sidebar border-r border-sidebar-border flex flex-col">
+    <div className="flex flex-col h-full bg-sidebar">
       {/* Logo Header */}
       <div className="p-6 border-b border-sidebar-border">
         <div className="flex items-center space-x-3">
@@ -72,7 +76,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation Menu */}
-      <nav className="flex-1 px-4 py-6 space-y-2">
+      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
         {/* Dashboard */}
         <div className="mb-6">
           {navigation.map((item) => {
@@ -212,6 +216,32 @@ export default function Sidebar() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Botón para móvil
+export function MobileSidebarTrigger() {
+  return (
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button variant="ghost" size="icon" className="md:hidden">
+          <Menu className="h-6 w-6" />
+          <span className="sr-only">Abrir menú</span>
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-80 p-0">
+        <SidebarContent />
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// Sidebar principal para desktop
+export default function Sidebar() {
+  return (
+    <aside className="hidden md:flex w-60 bg-sidebar border-r border-sidebar-border">
+      <SidebarContent />
     </aside>
   );
 }

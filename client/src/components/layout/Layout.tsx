@@ -12,7 +12,9 @@ export default function Layout({ children }: LayoutProps) {
       <Sidebar />
       <main className="flex-1 overflow-y-auto">
         <Header />
-        {children}
+        <div className="p-4 md:p-6">
+          {children}
+        </div>
       </main>
     </div>
   );

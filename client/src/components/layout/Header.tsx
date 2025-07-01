@@ -4,6 +4,7 @@ import { Bell, Plus } from "lucide-react";
 import { useState } from "react";
 import SimpleProductForm from "@/components/forms/SimpleProductForm";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { MobileSidebarTrigger } from "./Sidebar";
 
 const pageNames: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Dashboard", subtitle: "Resumen general del inventario" },
@@ -21,13 +22,16 @@ export default function Header() {
   const pageInfo = pageNames[location] || { title: "Página", subtitle: "" };
 
   return (
-    <header className="bg-card border-b border-border px-6 py-4">
+    <header className="bg-card border-b border-border px-4 md:px-6 py-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-foreground">{pageInfo.title}</h2>
-          {pageInfo.subtitle && (
-            <p className="text-sm text-muted-foreground mt-1">{pageInfo.subtitle}</p>
-          )}
+        <div className="flex items-center gap-4">
+          <MobileSidebarTrigger />
+          <div>
+            <h2 className="text-xl md:text-2xl font-semibold text-foreground">{pageInfo.title}</h2>
+            {pageInfo.subtitle && (
+              <p className="text-sm text-muted-foreground mt-1 hidden sm:block">{pageInfo.subtitle}</p>
+            )}
+          </div>
         </div>
         <div className="flex items-center space-x-4">
           <Dialog open={isProductModalOpen} onOpenChange={setIsProductModalOpen}>
