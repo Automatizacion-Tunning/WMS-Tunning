@@ -1,0 +1,83 @@
+Ingreso inicial
+
+Desde la UI existente de “Ingreso a bodega”, forzar bodega = "Principal".
+
+Aplicar precioAplicado según preciosMensuales del mes actual.
+
+Si requiereSerial = true, exigir captura de seriales (uno por unidad).
+
+Solicitud de traspaso
+
+Usuario elige producto, cantidad disponible en su bodega actual y bodega destino.
+
+Se crea una orden con estado = "Pendiente" y se notifica al Jefe de Proyectos del centro de costos asociado.
+
+Aprobación/Rechazo
+
+En la UI de “Órdenes de Trabajo” el Jefe ve solo las órdenes de su centro de costos.
+
+Puede cambiar estado a "Aprobada" o "Rechazada".
+
+Si es aprobada, el sistema mueve stock: descuenta de bodegaOrigen y suma a bodegaDestino.
+
+Si es rechazada, no se modifica inventario y se notifica al solicitante.
+
+3. Actualización de pantallas y rutas
+
+Productos → Ficha
+
+Mostrar historial de precios y opción para marcar “requiere serial”.
+
+Inventario → Ingreso
+
+Forzar bodega “Principal” y cálculo automático de precio.
+
+Inventario → Traspaso (nueva pantalla)
+
+Formulario: SKU (dropdown), cantidad, bodega origen (preseleccionada), bodega destino, centro de costos.
+
+Órdenes de Trabajo (nueva sección)
+
+Lista filtrable por estado y rol de usuario (solicitante vs. jefe).
+
+Botones “Aprobar” / “Rechazar” para jefes de proyecto.
+
+4. Permisos y roles
+
+Usuario Operativo: puede dar de alta productos, ingresar a bodega Principal y solicitar traspasos.
+
+Jefe de Proyectos: puede ver y gestionar sólo las órdenes de su centro de costos.
+
+5. Validaciones y retrocompatibilidad
+
+No romper datos existentes: migrar precios antiguos a preciosMensuales con fecha de creación.
+
+Validar cantidades positivas, seriales en formato alfanumérico, y existencia de stock antes de crear traspaso.
+
+6. Ejemplos JSON de la actualización
+
+jsonc
+Copiar
+Editar
+// Nueva orden de traspaso
+{
+  "ordenId": "OT-678",
+  "sku": "PRD-002",
+  "cantidad": 3,
+  "bodegaOrigen": "Principal",
+  "bodegaDestino": "Bodega Secundaria",
+  "centroCostos": "CC-03",
+  "solicitanteId": "u123",
+  "estado": "Pendiente",
+  "jefeProyectoId": "jperez@empresa.com",
+  "createdAt": "2025-07-01T10:15:00Z"
+}
+Entregables
+
+Listado de cambios a la base de datos (migraciones).
+
+Parches o diffs de código back-end y front-end.
+
+Mockups o descripciones de las pantallas nuevas/actualizadas.
+
+Instrucciones para desplegar la versión actualizada en Replit sin interrumpir el servicio.

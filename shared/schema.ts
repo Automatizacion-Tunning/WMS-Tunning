@@ -71,14 +71,39 @@ export const inventoryMovements = pgTable("inventory_movements", {
   warehouseId: integer("warehouse_id").notNull(),
   movementType: varchar("movement_type", { length: 10 }).notNull(), // 'in' or 'out'
   quantity: integer("quantity").notNull(),
+  appliedPrice: decimal("applied_price", { precision: 10, scale: 2 }), // Precio aplicado en el momento del movimiento
   reason: text("reason"),
   userId: integer("user_id").notNull(),
+  transferOrderId: integer("transfer_order_id"), // Vinculado a orden de traspaso si aplica
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Nueva tabla para órdenes de traspaso
+export const transferOrders = pgTable("transfer_orders", {
+  id: serial("id").primaryKey(),
+  orderNumber: varchar("order_number", { length: 20 }).notNull().unique(), // Ej: OT-678
+  productId: integer("product_id").notNull(),
+  quantity: integer("quantity").notNull(),
+  sourceWarehouseId: integer("source_warehouse_id").notNull(),
+  destinationWarehouseId: integer("destination_warehouse_id").notNull(),
+  costCenter: varchar("cost_center", { length: 100 }).notNull(),
+  requesterId: integer("requester_id").notNull(), // Usuario que solicita
+  projectManagerId: integer("project_manager_id"), // Jefe de proyecto que aprueba
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // 'pending', 'approved', 'rejected'
+  notes: text("notes"), // Comentarios adicionales
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   inventoryMovements: many(inventoryMovements),
+  requestedTransferOrders: many(transferOrders, {
+    relationName: "requesterTransferOrders"
+  }),
+  managedTransferOrders: many(transferOrders, {
+    relationName: "managerTransferOrders"
+  }),
 }));
 
 export const warehousesRelations = relations(warehouses, ({ one, many }) => ({
@@ -146,6 +171,38 @@ export const inventoryMovementsRelations = relations(inventoryMovements, ({ one 
     fields: [inventoryMovements.userId],
     references: [users.id],
   }),
+  transferOrder: one(transferOrders, {
+    fields: [inventoryMovements.transferOrderId],
+    references: [transferOrders.id],
+  }),
+}));
+
+export const transferOrdersRelations = relations(transferOrders, ({ one, many }) => ({
+  product: one(products, {
+    fields: [transferOrders.productId],
+    references: [products.id],
+  }),
+  sourceWarehouse: one(warehouses, {
+    fields: [transferOrders.sourceWarehouseId],
+    references: [warehouses.id],
+    relationName: "sourceWarehouse"
+  }),
+  destinationWarehouse: one(warehouses, {
+    fields: [transferOrders.destinationWarehouseId],
+    references: [warehouses.id],
+    relationName: "destinationWarehouse"
+  }),
+  requester: one(users, {
+    fields: [transferOrders.requesterId],
+    references: [users.id],
+    relationName: "requesterTransferOrders"
+  }),
+  projectManager: one(users, {
+    fields: [transferOrders.projectManagerId],
+    references: [users.id],
+    relationName: "managerTransferOrders"
+  }),
+  inventoryMovements: many(inventoryMovements),
 }));
 
 // Insert schemas
@@ -184,6 +241,12 @@ export const insertProductSerialSchema = createInsertSchema(productSerials).omit
   createdAt: true,
 });
 
+export const insertTransferOrderSchema = createInsertSchema(transferOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -218,9 +281,21 @@ export type InsertProductPrice = z.infer<typeof insertProductPriceSchema>;
 export type ProductSerial = typeof productSerials.$inferSelect;
 export type InsertProductSerial = z.infer<typeof insertProductSerialSchema>;
 
+export type TransferOrder = typeof transferOrders.$inferSelect;
+export type InsertTransferOrder = z.infer<typeof insertTransferOrderSchema>;
+
 // Tipo extendido para productos con precio actual
 export type ProductWithCurrentPrice = Product & {
   currentPrice?: ProductPrice;
+};
+
+// Tipo extendido para órdenes de traspaso con detalles
+export type TransferOrderWithDetails = TransferOrder & {
+  product: Product;
+  sourceWarehouse: Warehouse;
+  destinationWarehouse: Warehouse;
+  requester: User;
+  projectManager?: User;
 };
 
 // Esquemas de validación para formularios
@@ -239,4 +314,22 @@ export const warehouseEntrySchema = z.object({
 export const costCenterFormSchema = z.object({
   costCenter: z.string().min(1, "El centro de costo es requerido"),
   location: z.string().optional(),
+});
+
+// Esquema para solicitar traspaso entre bodegas
+export const transferRequestSchema = z.object({
+  productId: z.number().min(1, "Debe seleccionar un producto"),
+  quantity: z.number().min(1, "La cantidad debe ser mayor a 0"),
+  sourceWarehouseId: z.number().min(1, "Debe seleccionar bodega origen"),
+  destinationWarehouseId: z.number().min(1, "Debe seleccionar bodega destino"),
+  costCenter: z.string().min(1, "El centro de costo es requerido"),
+  notes: z.string().optional(),
+});
+
+// Esquema para ingreso inicial de productos (solo a bodega principal)
+export const stockEntrySchema = z.object({
+  productId: z.number().min(1, "Debe seleccionar un producto"),
+  quantity: z.number().min(1, "La cantidad debe ser mayor a 0"),
+  serialNumbers: z.array(z.string().min(1, "El número de serie no puede estar vacío")).optional(),
+  reason: z.string().optional(),
 });

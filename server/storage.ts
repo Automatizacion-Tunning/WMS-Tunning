@@ -1,5 +1,5 @@
 import { 
-  users, warehouses, products, inventory, inventoryMovements, productPrices, productSerials,
+  users, warehouses, products, inventory, inventoryMovements, productPrices, productSerials, transferOrders,
   type User, type InsertUser,
   type Warehouse, type InsertWarehouse,
   type Product, type InsertProduct,
@@ -7,8 +7,9 @@ import {
   type InventoryMovement, type InsertInventoryMovement,
   type ProductPrice, type InsertProductPrice,
   type ProductSerial, type InsertProductSerial,
+  type TransferOrder, type InsertTransferOrder,
   type InventoryWithDetails, type InventoryMovementWithDetails,
-  type ProductWithCurrentPrice
+  type ProductWithCurrentPrice, type TransferOrderWithDetails
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
@@ -71,6 +72,17 @@ export interface IStorage {
 
   // Cost Center operations
   createCostCenter(costCenter: string, location?: string): Promise<Warehouse[]>;
+
+  // Transfer Orders operations
+  createTransferOrder(order: InsertTransferOrder): Promise<TransferOrder>;
+  getTransferOrders(userId?: number, role?: string, costCenter?: string): Promise<TransferOrderWithDetails[]>;
+  getTransferOrder(id: number): Promise<TransferOrderWithDetails | undefined>;
+  updateTransferOrderStatus(id: number, status: string, projectManagerId?: number): Promise<TransferOrder | undefined>;
+  generateOrderNumber(): Promise<string>;
+  
+  // Principal warehouse operations
+  getPrincipalWarehouse(costCenter: string): Promise<Warehouse | undefined>;
+  createPrincipalWarehouse(costCenter: string, location?: string): Promise<Warehouse>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -335,8 +347,10 @@ export class DatabaseStorage implements IStorage {
       warehouseId: inventoryMovements.warehouseId,
       movementType: inventoryMovements.movementType,
       quantity: inventoryMovements.quantity,
+      appliedPrice: inventoryMovements.appliedPrice,
       reason: inventoryMovements.reason,
       userId: inventoryMovements.userId,
+      transferOrderId: inventoryMovements.transferOrderId,
       createdAt: inventoryMovements.createdAt,
       product: products,
       warehouse: warehouses,
@@ -357,8 +371,10 @@ export class DatabaseStorage implements IStorage {
       warehouseId: inventoryMovements.warehouseId,
       movementType: inventoryMovements.movementType,
       quantity: inventoryMovements.quantity,
+      appliedPrice: inventoryMovements.appliedPrice,
       reason: inventoryMovements.reason,
       userId: inventoryMovements.userId,
+      transferOrderId: inventoryMovements.transferOrderId,
       createdAt: inventoryMovements.createdAt,
       product: products,
       warehouse: warehouses,
@@ -531,6 +547,204 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       throw new Error(`Failed to create cost center: ${error}`);
     }
+  }
+
+  // Transfer Orders operations
+  async createTransferOrder(order: InsertTransferOrder): Promise<TransferOrder> {
+    const [newOrder] = await db.insert(transferOrders).values(order).returning();
+    return newOrder;
+  }
+
+  async getTransferOrders(userId?: number, role?: string, costCenter?: string): Promise<TransferOrderWithDetails[]> {
+    let query = db.select({
+      id: transferOrders.id,
+      orderNumber: transferOrders.orderNumber,
+      productId: transferOrders.productId,
+      quantity: transferOrders.quantity,
+      sourceWarehouseId: transferOrders.sourceWarehouseId,
+      destinationWarehouseId: transferOrders.destinationWarehouseId,
+      costCenter: transferOrders.costCenter,
+      requesterId: transferOrders.requesterId,
+      projectManagerId: transferOrders.projectManagerId,
+      status: transferOrders.status,
+      notes: transferOrders.notes,
+      createdAt: transferOrders.createdAt,
+      updatedAt: transferOrders.updatedAt,
+      product: products,
+      sourceWarehouse: {
+        id: warehouses.id,
+        name: warehouses.name,
+        location: warehouses.location,
+        costCenter: warehouses.costCenter,
+        parentWarehouseId: warehouses.parentWarehouseId,
+        warehouseType: warehouses.warehouseType,
+        subWarehouseType: warehouses.subWarehouseType,
+        isActive: warehouses.isActive,
+        createdAt: warehouses.createdAt,
+      },
+      destinationWarehouse: {
+        id: warehouses.id,
+        name: warehouses.name,
+        location: warehouses.location,
+        costCenter: warehouses.costCenter,
+        parentWarehouseId: warehouses.parentWarehouseId,
+        warehouseType: warehouses.warehouseType,
+        subWarehouseType: warehouses.subWarehouseType,
+        isActive: warehouses.isActive,
+        createdAt: warehouses.createdAt,
+      },
+      requester: users,
+      projectManager: users
+    })
+    .from(transferOrders)
+    .leftJoin(products, eq(transferOrders.productId, products.id))
+    .leftJoin(warehouses, eq(transferOrders.sourceWarehouseId, warehouses.id))
+    .leftJoin(users, eq(transferOrders.requesterId, users.id));
+
+    // Apply filters
+    if (userId && role === 'project_manager') {
+      query = query.where(eq(transferOrders.projectManagerId, userId));
+    } else if (userId) {
+      query = query.where(eq(transferOrders.requesterId, userId));
+    }
+
+    if (costCenter) {
+      query = query.where(eq(transferOrders.costCenter, costCenter));
+    }
+
+    const results = await query.orderBy(desc(transferOrders.createdAt));
+    
+    return results.map(row => ({
+      ...row,
+      sourceWarehouse: row.sourceWarehouse as Warehouse,
+      destinationWarehouse: row.destinationWarehouse as Warehouse,
+      requester: row.requester as User,
+      projectManager: row.projectManager as User | undefined,
+    })) as TransferOrderWithDetails[];
+  }
+
+  async getTransferOrder(id: number): Promise<TransferOrderWithDetails | undefined> {
+    const [result] = await db.select({
+      id: transferOrders.id,
+      orderNumber: transferOrders.orderNumber,
+      productId: transferOrders.productId,
+      quantity: transferOrders.quantity,
+      sourceWarehouseId: transferOrders.sourceWarehouseId,
+      destinationWarehouseId: transferOrders.destinationWarehouseId,
+      costCenter: transferOrders.costCenter,
+      requesterId: transferOrders.requesterId,
+      projectManagerId: transferOrders.projectManagerId,
+      status: transferOrders.status,
+      notes: transferOrders.notes,
+      createdAt: transferOrders.createdAt,
+      updatedAt: transferOrders.updatedAt,
+      product: products,
+      sourceWarehouse: warehouses,
+      destinationWarehouse: warehouses,
+      requester: users,
+      projectManager: users
+    })
+    .from(transferOrders)
+    .leftJoin(products, eq(transferOrders.productId, products.id))
+    .leftJoin(warehouses, eq(transferOrders.sourceWarehouseId, warehouses.id))
+    .leftJoin(users, eq(transferOrders.requesterId, users.id))
+    .where(eq(transferOrders.id, id));
+
+    if (!result) return undefined;
+
+    return {
+      ...result,
+      sourceWarehouse: result.sourceWarehouse as Warehouse,
+      destinationWarehouse: result.destinationWarehouse as Warehouse,
+      requester: result.requester as User,
+      projectManager: result.projectManager as User | undefined,
+    } as TransferOrderWithDetails;
+  }
+
+  async updateTransferOrderStatus(id: number, status: string, projectManagerId?: number): Promise<TransferOrder | undefined> {
+    const [updatedOrder] = await db.update(transferOrders)
+      .set({ 
+        status,
+        projectManagerId,
+        updatedAt: new Date()
+      })
+      .where(eq(transferOrders.id, id))
+      .returning();
+
+    // If approved, execute the transfer
+    if (status === 'approved' && updatedOrder) {
+      const order = await this.getTransferOrder(id);
+      if (order) {
+        // Create inventory movements for the transfer
+        await this.createInventoryMovement({
+          productId: order.productId,
+          warehouseId: order.sourceWarehouseId,
+          movementType: 'out',
+          quantity: order.quantity,
+          transferOrderId: id,
+          reason: `Traspaso salida - Orden ${order.orderNumber}`,
+          userId: projectManagerId || 1,
+        });
+
+        await this.createInventoryMovement({
+          productId: order.productId,
+          warehouseId: order.destinationWarehouseId,
+          movementType: 'in',
+          quantity: order.quantity,
+          transferOrderId: id,
+          reason: `Traspaso entrada - Orden ${order.orderNumber}`,
+          userId: projectManagerId || 1,
+        });
+
+        // Update inventory quantities
+        await this.updateInventory(order.productId, order.sourceWarehouseId, -order.quantity);
+        await this.updateInventory(order.productId, order.destinationWarehouseId, order.quantity);
+      }
+    }
+
+    return updatedOrder || undefined;
+  }
+
+  async generateOrderNumber(): Promise<string> {
+    // Get the latest order number for today
+    const today = new Date().toISOString().split('T')[0];
+    const [latestOrder] = await db.select({ orderNumber: transferOrders.orderNumber })
+      .from(transferOrders)
+      .where(sql`DATE(${transferOrders.createdAt}) = ${today}`)
+      .orderBy(desc(transferOrders.id))
+      .limit(1);
+
+    if (latestOrder) {
+      const currentNumber = parseInt(latestOrder.orderNumber.split('-')[1]);
+      return `OT-${(currentNumber + 1).toString().padStart(3, '0')}`;
+    }
+
+    return 'OT-001';
+  }
+
+  // Principal warehouse operations
+  async getPrincipalWarehouse(costCenter: string): Promise<Warehouse | undefined> {
+    const [warehouse] = await db.select().from(warehouses)
+      .where(and(
+        eq(warehouses.costCenter, costCenter),
+        eq(warehouses.warehouseType, 'main')
+      ));
+    return warehouse || undefined;
+  }
+
+  async createPrincipalWarehouse(costCenter: string, location?: string): Promise<Warehouse> {
+    const [newWarehouse] = await db.insert(warehouses)
+      .values({
+        name: `Bodega Principal ${costCenter}`,
+        location: location || `Ubicación Central ${costCenter}`,
+        costCenter,
+        parentWarehouseId: null,
+        warehouseType: 'main',
+        subWarehouseType: null,
+        isActive: true,
+      })
+      .returning();
+    return newWarehouse;
   }
 }
 
