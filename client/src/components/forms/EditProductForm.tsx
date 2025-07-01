@@ -264,10 +264,30 @@ export default function EditProductForm({ product, onSuccess, onCancel }: EditPr
                 <FormControl>
                   <Input 
                     type="number" 
+                    min="0"
+                    step="1"
                     placeholder="10" 
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     {...field}
                     value={field.value || ""}
-                    onChange={(e) => field.onChange(Number(e.target.value))}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === "") {
+                        field.onChange("");
+                        return;
+                      }
+                      
+                      const numValue = Number(value);
+                      if (!isNaN(numValue) && numValue >= 0 && Number.isInteger(numValue)) {
+                        field.onChange(numValue);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      if (!e.target.value) {
+                        field.onChange(0);
+                      }
+                    }}
                   />
                 </FormControl>
                 <FormMessage />

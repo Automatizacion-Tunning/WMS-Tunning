@@ -222,9 +222,29 @@ export default function TransferRequestForm({ onSuccess, onCancel }: TransferReq
                   type="number"
                   min="1"
                   max={availableStock}
+                  step="1"
                   placeholder="1"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   {...field}
-                  onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
+                  value={field.value || ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === "") {
+                      field.onChange("");
+                      return;
+                    }
+                    
+                    const numValue = Number(value);
+                    if (!isNaN(numValue) && numValue > 0 && numValue <= availableStock && Number.isInteger(numValue)) {
+                      field.onChange(numValue);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    if (!e.target.value || Number(e.target.value) < 1) {
+                      field.onChange(1);
+                    }
+                  }}
                 />
               </FormControl>
               {selectedProductId > 0 && selectedSourceWarehouseId > 0 && (

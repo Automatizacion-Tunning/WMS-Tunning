@@ -239,12 +239,33 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
                 <Input
                   type="number"
                   min="1"
+                  step="1"
                   placeholder="1"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   {...field}
+                  value={field.value || ""}
                   onChange={(e) => {
-                    field.onChange(parseInt(e.target.value) || 1);
-                    // Reset serial numbers when quantity changes
-                    setSerialNumbers([]);
+                    const value = e.target.value;
+                    // Permitir campo vacío temporalmente para mejor UX en móviles
+                    if (value === "") {
+                      field.onChange("");
+                      setSerialNumbers([]);
+                      return;
+                    }
+                    
+                    // Validar que sea un número positivo
+                    const numValue = Number(value);
+                    if (!isNaN(numValue) && numValue > 0 && Number.isInteger(numValue)) {
+                      field.onChange(numValue);
+                      setSerialNumbers([]);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // Si el campo está vacío al salir, establecer valor mínimo
+                    if (!e.target.value || Number(e.target.value) < 1) {
+                      field.onChange(1);
+                    }
                   }}
                 />
               </FormControl>
