@@ -16,6 +16,9 @@ export const warehouses = pgTable("warehouses", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
   location: text("location"),
+  costCenter: varchar("cost_center", { length: 100 }).notNull(),
+  parentWarehouseId: integer("parent_warehouse_id"),
+  warehouseType: varchar("warehouse_type", { length: 50 }).notNull().default('sub'), // 'main' or 'sub'
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -55,9 +58,16 @@ export const usersRelations = relations(users, ({ many }) => ({
   inventoryMovements: many(inventoryMovements),
 }));
 
-export const warehousesRelations = relations(warehouses, ({ many }) => ({
+export const warehousesRelations = relations(warehouses, ({ one, many }) => ({
   inventory: many(inventory),
   inventoryMovements: many(inventoryMovements),
+  parentWarehouse: one(warehouses, {
+    fields: [warehouses.parentWarehouseId],
+    references: [warehouses.id],
+  }),
+  subWarehouses: many(warehouses, {
+    relationName: "parentChild"
+  }),
 }));
 
 export const productsRelations = relations(products, ({ many }) => ({

@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Edit, Trash2, MapPin } from "lucide-react";
+import { Plus, Edit, Trash2, MapPin, Building2, ChevronRight } from "lucide-react";
 import WarehouseForm from "@/components/forms/WarehouseForm";
 import type { Warehouse } from "@shared/schema";
 
@@ -67,24 +67,48 @@ export default function WarehouseManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre</TableHead>
+                  <TableHead>Centro de Costos</TableHead>
+                  <TableHead>Tipo</TableHead>
                   <TableHead>Ubicación</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead>Fecha Creación</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {warehouses?.map((warehouse: Warehouse) => (
+                {warehouses
+                  ?.sort((a: Warehouse, b: Warehouse) => {
+                    // Mostrar bodega principal primero, luego sub-bodegas por centro de costos
+                    if (a.warehouseType === 'main' && b.warehouseType === 'sub') return -1;
+                    if (a.warehouseType === 'sub' && b.warehouseType === 'main') return 1;
+                    return a.costCenter.localeCompare(b.costCenter);
+                  })
+                  .map((warehouse: Warehouse) => (
                   <TableRow key={warehouse.id}>
                     <TableCell>
                       <div className="flex items-center">
                         <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center mr-3">
-                          <MapPin className="w-4 h-4 text-primary" />
+                          {warehouse.warehouseType === 'main' ? 
+                            <Building2 className="w-4 h-4 text-primary" /> : 
+                            <MapPin className="w-4 h-4 text-primary" />
+                          }
                         </div>
                         <div>
-                          <p className="font-medium">{warehouse.name}</p>
+                          <p className="font-medium">
+                            {warehouse.warehouseType === 'sub' && <ChevronRight className="w-3 h-3 inline mr-1" />}
+                            {warehouse.name}
+                          </p>
                         </div>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="font-medium">
+                        {warehouse.costCenter}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={warehouse.warehouseType === 'main' ? "default" : "secondary"}>
+                        {warehouse.warehouseType === 'main' ? 'Principal' : 'Sub-bodega'}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {warehouse.location || "No especificada"}
@@ -93,9 +117,6 @@ export default function WarehouseManagement() {
                       <Badge variant={warehouse.isActive ? "default" : "secondary"}>
                         {warehouse.isActive ? "Activa" : "Inactiva"}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(warehouse.createdAt).toLocaleDateString('es-ES')}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">

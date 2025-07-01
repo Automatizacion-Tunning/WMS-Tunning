@@ -32,10 +32,13 @@ The application follows a full-stack TypeScript architecture with clear separati
 
 ### Core Entities
 1. **Users**: Authentication and role-based access control
-2. **Warehouses**: Physical storage locations management
-3. **Products**: Inventory items with SKU tracking
-4. **Inventory**: Stock levels per product per warehouse
-5. **Inventory Movements**: Audit trail for stock changes
+2. **Warehouses**: Hierarchical storage system organized by cost centers
+   - Main warehouse (PRINCIPAL)
+   - Sub-warehouses: UM2, PLATAFORMA, PEM, INTEGRADOR
+   - Cost center-based organization for better control
+3. **Products**: Inventory items with SKU tracking and CLP pricing
+4. **Inventory**: Stock levels per product per warehouse across all locations
+5. **Inventory Movements**: Audit trail for stock changes with warehouse tracking
 
 ### Frontend Components
 - **Layout System**: Sidebar navigation with responsive design
@@ -114,6 +117,11 @@ The application follows a full-stack TypeScript architecture with clear separati
 ```
 Changelog:
 - July 01, 2025. Initial setup
+- July 01, 2025. Implemented hierarchical warehouse structure with cost centers
+  * Added cost center fields to warehouse schema
+  * Created main warehouse with sub-warehouses (UM2, PLATAFORMA, PEM, INTEGRADOR)
+  * Updated warehouse management interface with hierarchy visualization
+  * Populated sample data with proper warehouse structure
 ```
 
 ## User Preferences
