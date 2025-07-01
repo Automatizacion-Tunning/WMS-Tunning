@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { stockEntrySchema, type Product } from "@shared/schema";
-import BarcodeScanner from "@/components/ui/barcode-scanner";
+import BarcodeScannerNative from "@/components/ui/barcode-scanner-native";
 import { z } from "zod";
 import { Plus, X, QrCode } from "lucide-react";
 
@@ -324,7 +324,7 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
       </form>
     </Form>
 
-    <BarcodeScanner
+    <BarcodeScannerNative
       isOpen={isScannerOpen}
       onClose={() => setIsScannerOpen(false)}
       onScan={handleBarcodeScanned}
