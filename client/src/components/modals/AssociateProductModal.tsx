@@ -46,6 +46,12 @@ export default function AssociateProductModal({
   const associateMutation = useMutation({
     mutationFn: async (productId: number) => {
       console.log("🔗 Asociando código:", barcode, "a producto:", productId);
+      
+      // Verificar que el código no esté vacío
+      if (!barcode) {
+        throw new Error("Código de barras requerido");
+      }
+      
       const requestBody = { barcode };
       console.log("📤 Enviando:", requestBody);
       

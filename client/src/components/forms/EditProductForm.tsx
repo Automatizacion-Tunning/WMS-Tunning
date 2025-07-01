@@ -49,13 +49,60 @@ export default function EditProductForm({ product, onSuccess, onCancel }: EditPr
   });
 
   // Funciones para el escáner de código de barras
-  const handleBarcodeScanned = (barcode: string) => {
+  const handleBarcodeScanned = async (barcode: string) => {
+    // Verificar si el código ya existe en otro producto
+    try {
+      const response = await fetch(`/api/products?barcode=${encodeURIComponent(barcode)}`);
+      if (response.ok) {
+        const existingProduct = await response.json();
+        if (existingProduct.id !== product.id) {
+          toast({
+            title: "Código de barras duplicado",
+            description: `Este código ya está asignado al producto "${existingProduct.name}" (SKU: ${existingProduct.sku})`,
+            variant: "destructive",
+          });
+          setIsBarcodeScannerOpen(false);
+          return;
+        }
+      }
+    } catch (error) {
+      // Si hay error en la verificación, continuar (probablemente el código no existe)
+    }
+
     form.setValue("barcode", barcode);
     setIsBarcodeScannerOpen(false);
     toast({
       title: "Código escaneado",
       description: `Código ${barcode} agregado al producto`,
     });
+  };
+
+  // Validar código de barras cuando se escribe manualmente
+  const validateBarcode = async (barcode: string) => {
+    if (!barcode || barcode === product.barcode) return; // No validar si está vacío o es el mismo código actual
+    
+    try {
+      const response = await fetch(`/api/products?barcode=${encodeURIComponent(barcode)}`);
+      if (response.ok) {
+        const existingProduct = await response.json();
+        if (existingProduct.id !== product.id) {
+          form.setError("barcode", {
+            type: "manual",
+            message: `Este código ya está asignado al producto "${existingProduct.name}" (SKU: ${existingProduct.sku})`
+          });
+          toast({
+            title: "Código de barras duplicado",
+            description: `Este código ya está asignado al producto "${existingProduct.name}"`,
+            variant: "destructive",
+          });
+        }
+      } else {
+        // Si la respuesta es 404, el código no existe (válido)
+        form.clearErrors("barcode");
+      }
+    } catch (error) {
+      // Error en la verificación, no hacer nada
+    }
   };
 
   const updateProductMutation = useMutation({
@@ -69,7 +116,11 @@ export default function EditProductForm({ product, onSuccess, onCancel }: EditPr
       });
       
       if (!response.ok) {
-        throw new Error("Error al actualizar el producto");
+        const errorData = await response.json().catch(() => ({}));
+        const error = new Error(errorData.message || "Error al actualizar el producto");
+        (error as any).status = response.status;
+        (error as any).data = errorData;
+        throw error;
       }
       
       return response.json();
@@ -83,12 +134,33 @@ export default function EditProductForm({ product, onSuccess, onCancel }: EditPr
       form.reset();
       onSuccess?.();
     },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: "No se pudo actualizar el producto. Intenta nuevamente.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      if (error.status === 409) {
+        // Error de código de barras duplicado
+        const errorData = error.data || {};
+        const existingProduct = errorData.existingProduct;
+        
+        if (existingProduct) {
+          form.setError("barcode", {
+            type: "manual",
+            message: `Este código ya está asignado al producto "${existingProduct.name}" (SKU: ${existingProduct.sku})`
+          });
+        }
+        
+        toast({
+          title: "Código de barras duplicado",
+          description: existingProduct 
+            ? `Este código ya está asignado al producto "${existingProduct.name}"`
+            : "Este código de barras ya está en uso",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "No se pudo actualizar el producto. Intenta nuevamente.",
+          variant: "destructive",
+        });
+      }
     },
   });
 
@@ -144,6 +216,10 @@ export default function EditProductForm({ product, onSuccess, onCancel }: EditPr
                       placeholder="Ej: 123456789012" 
                       {...field} 
                       value={field.value || ""}
+                      onBlur={(e) => {
+                        field.onBlur();
+                        validateBarcode(e.target.value);
+                      }}
                     />
                   </FormControl>
                   <Button
