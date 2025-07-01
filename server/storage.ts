@@ -1,11 +1,14 @@
 import { 
-  users, warehouses, products, inventory, inventoryMovements,
+  users, warehouses, products, inventory, inventoryMovements, productPrices, productSerials,
   type User, type InsertUser,
   type Warehouse, type InsertWarehouse,
   type Product, type InsertProduct,
   type Inventory, type InsertInventory,
   type InventoryMovement, type InsertInventoryMovement,
-  type InventoryWithDetails, type InventoryMovementWithDetails
+  type ProductPrice, type InsertProductPrice,
+  type ProductSerial, type InsertProductSerial,
+  type InventoryWithDetails, type InventoryMovementWithDetails,
+  type ProductWithCurrentPrice
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
@@ -28,10 +31,22 @@ export interface IStorage {
   // Products
   getProduct(id: number): Promise<Product | undefined>;
   getProductBySku(sku: string): Promise<Product | undefined>;
-  getAllProducts(): Promise<Product[]>;
-  createProduct(product: InsertProduct): Promise<Product>;
+  getAllProducts(): Promise<ProductWithCurrentPrice[]>;
+  createProduct(product: InsertProduct, currentPrice?: number): Promise<Product>;
   updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined>;
   deleteProduct(id: number): Promise<boolean>;
+
+  // Product Prices
+  getProductPrice(productId: number, year: number, month: number): Promise<ProductPrice | undefined>;
+  getCurrentProductPrice(productId: number): Promise<ProductPrice | undefined>;
+  setProductPrice(productId: number, year: number, month: number, price: number): Promise<ProductPrice>;
+  getProductPriceHistory(productId: number): Promise<ProductPrice[]>;
+
+  // Product Serials
+  createProductSerial(serial: InsertProductSerial): Promise<ProductSerial>;
+  getProductSerials(productId: number, warehouseId: number): Promise<ProductSerial[]>;
+  validateSerialNumber(productId: number, serialNumber: string): Promise<boolean>;
+  updateSerialStatus(serialId: number, status: string): Promise<ProductSerial | undefined>;
 
   // Inventory
   getInventory(productId: number, warehouseId: number): Promise<Inventory | undefined>;
@@ -130,14 +145,67 @@ export class DatabaseStorage implements IStorage {
     return product || undefined;
   }
 
-  async getAllProducts(): Promise<Product[]> {
-    return await db.select().from(products)
-      .where(eq(products.isActive, true))
-      .orderBy(asc(products.name));
+  async getAllProducts(): Promise<ProductWithCurrentPrice[]> {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+
+    const result = await db.select({
+      id: products.id,
+      name: products.name,
+      sku: products.sku,
+      description: products.description,
+      minStock: products.minStock,
+      productType: products.productType,
+      requiresSerial: products.requiresSerial,
+      isActive: products.isActive,
+      createdAt: products.createdAt,
+      priceId: productPrices.id,
+      priceProductId: productPrices.productId,
+      priceYear: productPrices.year,
+      priceMonth: productPrices.month,
+      price: productPrices.price,
+      priceCreatedAt: productPrices.createdAt,
+    })
+    .from(products)
+    .leftJoin(productPrices, and(
+      eq(products.id, productPrices.productId),
+      eq(productPrices.year, currentYear),
+      eq(productPrices.month, currentMonth)
+    ))
+    .where(eq(products.isActive, true))
+    .orderBy(asc(products.name));
+
+    return result.map(row => ({
+      id: row.id,
+      name: row.name,
+      sku: row.sku,
+      description: row.description,
+      minStock: row.minStock,
+      productType: row.productType,
+      requiresSerial: row.requiresSerial,
+      isActive: row.isActive,
+      createdAt: row.createdAt,
+      currentPrice: row.priceId ? {
+        id: row.priceId,
+        productId: row.priceProductId!,
+        year: row.priceYear!,
+        month: row.priceMonth!,
+        price: row.price!,
+        createdAt: row.priceCreatedAt!,
+      } : undefined,
+    }));
   }
 
-  async createProduct(insertProduct: InsertProduct): Promise<Product> {
+  async createProduct(insertProduct: InsertProduct, currentPrice?: number): Promise<Product> {
     const [product] = await db.insert(products).values(insertProduct).returning();
+    
+    // Si se proporciona un precio actual, crearlo
+    if (currentPrice !== undefined) {
+      const now = new Date();
+      await this.setProductPrice(product.id, now.getFullYear(), now.getMonth() + 1, currentPrice);
+    }
+    
     return product;
   }
 
@@ -315,11 +383,21 @@ export class DatabaseStorage implements IStorage {
 
     const lowStock = await this.getLowStockItems();
 
+    // Para el valor total del inventario, necesitamos usar precios actuales
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    
     const [inventoryValue] = await db.select({ 
-      total: sql<number>`coalesce(sum(${inventory.quantity} * ${products.price}), 0)` 
+      total: sql<number>`coalesce(sum(${inventory.quantity} * ${productPrices.price}::numeric), 0)` 
     })
     .from(inventory)
     .leftJoin(products, eq(inventory.productId, products.id))
+    .leftJoin(productPrices, and(
+      eq(productPrices.productId, products.id),
+      eq(productPrices.year, currentYear),
+      eq(productPrices.month, currentMonth)
+    ))
     .where(eq(products.isActive, true));
 
     return {
@@ -328,6 +406,90 @@ export class DatabaseStorage implements IStorage {
       lowStockCount: lowStock.length,
       totalInventoryValue: Number(inventoryValue.total) || 0,
     };
+  }
+
+  // Product Prices
+  async getProductPrice(productId: number, year: number, month: number): Promise<ProductPrice | undefined> {
+    const [price] = await db.select().from(productPrices)
+      .where(and(
+        eq(productPrices.productId, productId),
+        eq(productPrices.year, year),
+        eq(productPrices.month, month)
+      ));
+    return price || undefined;
+  }
+
+  async getCurrentProductPrice(productId: number): Promise<ProductPrice | undefined> {
+    const now = new Date();
+    return await this.getProductPrice(productId, now.getFullYear(), now.getMonth() + 1);
+  }
+
+  async setProductPrice(productId: number, year: number, month: number, price: number): Promise<ProductPrice> {
+    // Verificar si ya existe un precio para este mes/año
+    const existingPrice = await this.getProductPrice(productId, year, month);
+    
+    if (existingPrice) {
+      // Actualizar precio existente
+      const [updatedPrice] = await db.update(productPrices)
+        .set({ price: price.toString() })
+        .where(and(
+          eq(productPrices.productId, productId),
+          eq(productPrices.year, year),
+          eq(productPrices.month, month)
+        ))
+        .returning();
+      return updatedPrice;
+    } else {
+      // Crear nuevo precio
+      const [newPrice] = await db.insert(productPrices)
+        .values({
+          productId,
+          year,
+          month,
+          price: price.toString(),
+        })
+        .returning();
+      return newPrice;
+    }
+  }
+
+  async getProductPriceHistory(productId: number): Promise<ProductPrice[]> {
+    return await db.select().from(productPrices)
+      .where(eq(productPrices.productId, productId))
+      .orderBy(desc(productPrices.year), desc(productPrices.month));
+  }
+
+  // Product Serials
+  async createProductSerial(serial: InsertProductSerial): Promise<ProductSerial> {
+    const [newSerial] = await db.insert(productSerials).values(serial).returning();
+    return newSerial;
+  }
+
+  async getProductSerials(productId: number, warehouseId: number): Promise<ProductSerial[]> {
+    return await db.select().from(productSerials)
+      .where(and(
+        eq(productSerials.productId, productId),
+        eq(productSerials.warehouseId, warehouseId),
+        eq(productSerials.status, 'active')
+      ))
+      .orderBy(asc(productSerials.createdAt));
+  }
+
+  async validateSerialNumber(productId: number, serialNumber: string): Promise<boolean> {
+    const [existing] = await db.select().from(productSerials)
+      .where(and(
+        eq(productSerials.productId, productId),
+        eq(productSerials.serialNumber, serialNumber)
+      ));
+    return !existing; // Retorna true si NO existe (es válido)
+  }
+
+  async updateSerialStatus(serialId: number, status: string): Promise<ProductSerial | undefined> {
+    const [updatedSerial] = await db.update(productSerials)
+      .set({ status })
+      .where(eq(productSerials.id, serialId))
+      .returning();
+    return updatedSerial || undefined;
   }
 
   async createCostCenter(costCenter: string, location?: string): Promise<Warehouse[]> {

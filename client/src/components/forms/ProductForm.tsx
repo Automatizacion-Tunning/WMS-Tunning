@@ -5,33 +5,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { insertProductSchema } from "@shared/schema";
+import { productFormSchema } from "@shared/schema";
 import { z } from "zod";
-
-const productFormSchema = insertProductSchema.extend({
-  warehouseId: z.number().min(1, "Selecciona una bodega"),
-  initialStock: z.number().min(0, "El stock inicial debe ser positivo"),
-});
 
 type ProductFormData = z.infer<typeof productFormSchema>;
 
 interface ProductFormProps {
-  onSuccess?: () => void;
+  onSuccess?: (data: ProductFormData) => void;
+  onCancel?: () => void;
 }
 
-export default function ProductForm({ onSuccess }: ProductFormProps) {
+export default function ProductForm({ onSuccess, onCancel }: ProductFormProps) {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const { data: warehouses, isLoading: warehousesLoading } = useQuery({
-    queryKey: ["/api/warehouses"],
-  });
 
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
@@ -40,9 +31,9 @@ export default function ProductForm({ onSuccess }: ProductFormProps) {
       sku: "",
       description: "",
       minStock: 0,
-      price: "0",
-      warehouseId: 0,
-      initialStock: 0,
+      productType: "tangible",
+      requiresSerial: false,
+      currentPrice: 0,
     },
   });
 

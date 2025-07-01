@@ -10,7 +10,8 @@ import {
   Warehouse, 
   User,
   LogOut,
-  Building2
+  Building2,
+  Package
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,7 @@ const warehouseNavigation = [
 ];
 
 const productNavigation = [
+  { name: "Gestión", href: "/products/management", icon: Package },
   { name: "Ficha", href: "/products", icon: ClipboardList },
   { name: "Alta/Baja", href: "/products/movements", icon: PlusCircle },
 ];

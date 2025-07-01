@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, decimal, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, decimal, varchar, unique } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -30,8 +30,30 @@ export const products = pgTable("products", {
   sku: varchar("sku", { length: 50 }).notNull().unique(),
   description: text("description"),
   minStock: integer("min_stock").notNull().default(0),
-  price: decimal("price", { precision: 10, scale: 2 }),
+  productType: varchar("product_type", { length: 20 }).notNull().default("tangible"), // 'tangible' or 'intangible'
+  requiresSerial: boolean("requires_serial").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Tabla para precios mensuales
+export const productPrices = pgTable("product_prices", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull(),
+  year: integer("year").notNull(),
+  month: integer("month").notNull(), // 1-12
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Tabla para números de serie
+export const productSerials = pgTable("product_serials", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull(),
+  warehouseId: integer("warehouse_id").notNull(),
+  serialNumber: varchar("serial_number", { length: 100 }).notNull(),
+  movementId: integer("movement_id").notNull(), // Vinculado al movimiento de inventario
+  status: varchar("status", { length: 20 }).notNull().default("active"), // 'active', 'sold', 'damaged'
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -74,6 +96,30 @@ export const warehousesRelations = relations(warehouses, ({ one, many }) => ({
 export const productsRelations = relations(products, ({ many }) => ({
   inventory: many(inventory),
   inventoryMovements: many(inventoryMovements),
+  productPrices: many(productPrices),
+  productSerials: many(productSerials),
+}));
+
+export const productPricesRelations = relations(productPrices, ({ one }) => ({
+  product: one(products, {
+    fields: [productPrices.productId],
+    references: [products.id],
+  }),
+}));
+
+export const productSerialsRelations = relations(productSerials, ({ one }) => ({
+  product: one(products, {
+    fields: [productSerials.productId],
+    references: [products.id],
+  }),
+  warehouse: one(warehouses, {
+    fields: [productSerials.warehouseId],
+    references: [warehouses.id],
+  }),
+  movement: one(inventoryMovements, {
+    fields: [productSerials.movementId],
+    references: [inventoryMovements.id],
+  }),
 }));
 
 export const inventoryRelations = relations(inventory, ({ one }) => ({
@@ -128,6 +174,16 @@ export const insertInventoryMovementSchema = createInsertSchema(inventoryMovemen
   createdAt: true,
 });
 
+export const insertProductPriceSchema = createInsertSchema(productPrices).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProductSerialSchema = createInsertSchema(productSerials).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -155,3 +211,32 @@ export type InventoryMovementWithDetails = InventoryMovement & {
   warehouse: Warehouse;
   user: User;
 };
+
+export type ProductPrice = typeof productPrices.$inferSelect;
+export type InsertProductPrice = z.infer<typeof insertProductPriceSchema>;
+
+export type ProductSerial = typeof productSerials.$inferSelect;
+export type InsertProductSerial = z.infer<typeof insertProductSerialSchema>;
+
+// Tipo extendido para productos con precio actual
+export type ProductWithCurrentPrice = Product & {
+  currentPrice?: ProductPrice;
+};
+
+// Esquemas de validación para formularios
+export const productFormSchema = insertProductSchema.extend({
+  currentPrice: z.number().min(0.01, "El precio debe ser mayor a 0"),
+});
+
+export const warehouseEntrySchema = z.object({
+  productId: z.number().min(1, "Debe seleccionar un producto"),
+  warehouseId: z.number().min(1, "Debe seleccionar una bodega"),
+  quantity: z.number().min(1, "La cantidad debe ser mayor a 0"),
+  serialNumbers: z.array(z.string()).optional(),
+  reason: z.string().optional(),
+});
+
+export const costCenterFormSchema = z.object({
+  costCenter: z.string().min(1, "El centro de costo es requerido"),
+  location: z.string().optional(),
+});
