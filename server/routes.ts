@@ -112,6 +112,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Product routes
   app.get("/api/products", async (req, res) => {
     try {
+      // Si hay parámetro barcode, buscar por código de barras
+      if (req.query.barcode) {
+        const product = await storage.getProductByBarcode(req.query.barcode as string);
+        if (!product) {
+          return res.status(404).json({ message: "Product not found with this barcode" });
+        }
+        return res.json(product);
+      }
+      
+      // Si no hay barcode, retornar todos los productos
       const products = await storage.getAllProducts();
       res.json(products);
     } catch (error) {
@@ -151,6 +161,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(product);
     } catch (error) {
       res.status(400).json({ message: "Invalid product data", error });
+    }
+  });
+
+  // Associate barcode with existing product
+  app.put("/api/products/:id/barcode", async (req, res) => {
+    try {
+      const { barcode } = req.body;
+      if (!barcode) {
+        return res.status(400).json({ message: "Barcode is required" });
+      }
+
+      // Verificar que el código de barras no esté ya en uso
+      const existingProduct = await storage.getProductByBarcode(barcode);
+      if (existingProduct && existingProduct.id !== parseInt(req.params.id)) {
+        return res.status(409).json({ message: "Barcode already associated with another product" });
+      }
+
+      const product = await storage.updateProduct(parseInt(req.params.id), { barcode });
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+      res.json(product);
+    } catch (error) {
+      res.status(400).json({ message: "Failed to associate barcode", error });
     }
   });
 
