@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import BarcodeScannerNative from "@/components/ui/barcode-scanner-native";
@@ -43,10 +43,12 @@ export default function TestBarcode() {
     handleProductFound(product);
   };
 
-  // Auto-manejar cuando se encuentra un producto
-  if (barcodeFlow.state === "product-found" && barcodeFlow.product) {
-    handleProductFound(barcodeFlow.product);
-  }
+  // Auto-manejar cuando se encuentra un producto (usando useEffect para evitar setState durante render)
+  useEffect(() => {
+    if (barcodeFlow.state === "product-found" && barcodeFlow.product) {
+      handleProductFound(barcodeFlow.product);
+    }
+  }, [barcodeFlow.state, barcodeFlow.product, handleProductFound]);
 
   return (
     <div className="space-y-6">
