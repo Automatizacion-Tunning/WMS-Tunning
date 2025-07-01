@@ -27,6 +27,9 @@ export default function AssociateProductModal({
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
 
+  // Debug log para verificar el código recibido
+  console.log("🔗 Modal recibió código:", barcode);
+
   // Obtener productos sin código de barras
   const { data: allProducts = [], isLoading } = useQuery({
     queryKey: ["/api/products"],
