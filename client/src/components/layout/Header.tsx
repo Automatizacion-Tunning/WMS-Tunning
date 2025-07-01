@@ -2,7 +2,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Bell, Plus } from "lucide-react";
 import { useState } from "react";
-import ProductForm from "@/components/forms/ProductForm";
+import SimpleProductForm from "@/components/forms/SimpleProductForm";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 
 const pageNames: Record<string, { title: string; subtitle: string }> = {
@@ -38,7 +38,7 @@ export default function Header() {
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md">
-              <ProductForm onSuccess={() => setIsProductModalOpen(false)} />
+              <SimpleProductForm onSuccess={() => setIsProductModalOpen(false)} />
             </DialogContent>
           </Dialog>
           

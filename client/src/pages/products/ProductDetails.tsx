@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Edit, Trash2, Package } from "lucide-react";
-import ProductForm from "@/components/forms/ProductForm";
+import SimpleProductForm from "@/components/forms/SimpleProductForm";
 import type { Product } from "@shared/schema";
 
 export default function ProductDetails() {
@@ -60,7 +60,7 @@ export default function ProductDetails() {
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
-            <ProductForm onSuccess={() => setIsCreateModalOpen(false)} />
+            <SimpleProductForm onSuccess={() => setIsCreateModalOpen(false)} />
           </DialogContent>
         </Dialog>
       </div>
