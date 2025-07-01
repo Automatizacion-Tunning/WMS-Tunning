@@ -16,6 +16,7 @@ import UserList from "@/pages/users/UserList";
 import UserPermissions from "@/pages/users/UserPermissions";
 import StockEntry from "@/pages/inventory/StockEntry";
 import TransferOrders from "@/pages/orders/TransferOrders";
+import TestBarcode from "@/pages/TestBarcode";
 
 function Router() {
   return (
@@ -32,6 +33,7 @@ function Router() {
         <Route path="/orders/transfer-orders" component={TransferOrders} />
         <Route path="/users" component={UserList} />
         <Route path="/users/permissions" component={UserPermissions} />
+        <Route path="/test-barcode" component={TestBarcode} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

@@ -36,25 +36,33 @@ export function useBarcodeFlow(): UseBarcodeFlowReturn {
   const [error, setError] = useState<string | null>(null);
 
   // Query para buscar producto por código de barras
-  const { isLoading: isSearching } = useQuery({
-    queryKey: ["/api/products", { barcode }],
+  const { isLoading: isSearching, error: queryError } = useQuery({
+    queryKey: ["/api/products", "barcode", barcode],
     queryFn: async () => {
+      console.log("🔍 Buscando producto con código:", barcode);
       const response = await fetch(`/api/products?barcode=${encodeURIComponent(barcode!)}`);
+      
+      console.log("📡 Respuesta del servidor:", response.status);
+      
       if (response.status === 404) {
-        // Producto no encontrado
+        console.log("❌ Producto no encontrado");
         setState("product-not-found");
         return null;
       }
+      
       if (!response.ok) {
         throw new Error('Error al buscar producto');
       }
+      
       const product = await response.json();
+      console.log("✅ Producto encontrado:", product);
       setProduct(product);
       setState("product-found");
       return product;
     },
     enabled: !!barcode && state === "searching",
     retry: false,
+    staleTime: 0, // No usar caché para búsquedas de códigos de barras
   });
 
   const startScanning = useCallback(() => {
@@ -65,9 +73,11 @@ export function useBarcodeFlow(): UseBarcodeFlowReturn {
   }, []);
 
   const handleBarcodeScanned = useCallback((scannedBarcode: string) => {
+    console.log("📱 Código escaneado recibido:", scannedBarcode);
     setBarcode(scannedBarcode);
     setState("searching");
     setError(null);
+    setProduct(null);
   }, []);
 
   const handleCreateNew = useCallback(() => {
