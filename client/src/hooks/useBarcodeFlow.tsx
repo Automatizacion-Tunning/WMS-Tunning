@@ -106,6 +106,8 @@ export function useBarcodeFlow(): UseBarcodeFlowReturn {
   }, []);
 
   const handleCancel = useCallback(() => {
+    console.log("🚫 handleCancel llamado - reseteando estado");
+    console.trace("Stack trace para handleCancel");
     setState("idle");
     setBarcode(null);
     setProduct(null);
@@ -113,6 +115,8 @@ export function useBarcodeFlow(): UseBarcodeFlowReturn {
   }, []);
 
   const reset = useCallback(() => {
+    console.log("🔄 reset llamado - reseteando estado");
+    console.trace("Stack trace para reset");
     setState("idle");
     setBarcode(null);
     setProduct(null);

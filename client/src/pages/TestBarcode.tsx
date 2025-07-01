@@ -156,7 +156,7 @@ export default function TestBarcode() {
 
       {/* Modal para asociar producto existente */}
       <AssociateProductModal
-        isOpen={barcodeFlow.state === "associating-existing"}
+        isOpen={barcodeFlow.state === "associating-existing" && !!barcodeFlow.barcode}
         onClose={barcodeFlow.handleCancel}
         barcode={barcodeFlow.barcode || ""}
         onSuccess={handleProductCreatedOrAssociated}
