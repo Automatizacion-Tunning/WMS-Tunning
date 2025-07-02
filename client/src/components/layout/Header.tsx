@@ -1,9 +1,6 @@
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Bell, Plus } from "lucide-react";
-import { useState } from "react";
-import SimpleProductForm from "@/components/forms/SimpleProductForm";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Bell } from "lucide-react";
 import { MobileSidebarTrigger } from "./Sidebar";
 
 const pageNames: Record<string, { title: string; subtitle: string }> = {
@@ -17,7 +14,6 @@ const pageNames: Record<string, { title: string; subtitle: string }> = {
 
 export default function Header() {
   const [location] = useLocation();
-  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   
   const pageInfo = pageNames[location] || { title: "Página", subtitle: "" };
 
@@ -34,18 +30,6 @@ export default function Header() {
           </div>
         </div>
         <div className="flex items-center space-x-4">
-          <Dialog open={isProductModalOpen} onOpenChange={setIsProductModalOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-                <Plus className="w-4 h-4 mr-2" />
-                Nuevo Producto
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <SimpleProductForm onSuccess={() => setIsProductModalOpen(false)} />
-            </DialogContent>
-          </Dialog>
-          
           <div className="relative">
             <Button variant="outline" size="icon" className="w-8 h-8">
               <Bell className="w-4 h-4" />
