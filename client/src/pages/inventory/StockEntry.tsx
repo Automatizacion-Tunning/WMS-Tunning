@@ -58,9 +58,9 @@ export default function StockEntry() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">Actual</div>
+            <div className="text-2xl font-bold text-blue-600">Por Ingreso</div>
             <p className="text-xs text-muted-foreground">
-              Se aplica el precio del mes actual
+              Se captura precio específico para cada ingreso
             </p>
           </CardContent>
         </Card>
@@ -97,7 +97,7 @@ export default function StockEntry() {
                 <li>• Especifica la cantidad a ingresar</li>
                 <li>• Agrega números de serie si es requerido</li>
                 <li>• El sistema asigna automáticamente la bodega principal</li>
-                <li>• Se aplica el precio actual del producto</li>
+                <li>• Ingresa el precio específico para este movimiento</li>
               </ul>
             </div>
             
@@ -108,7 +108,7 @@ export default function StockEntry() {
                 <li>• Los números de serie deben ser únicos</li>
                 <li>• La cantidad debe ser mayor a 0</li>
                 <li>• Productos tangibles requieren gestión física</li>
-                <li>• Los precios se toman del mes actual</li>
+                <li>• El precio es obligatorio para cada ingreso</li>
               </ul>
             </div>
           </div>
