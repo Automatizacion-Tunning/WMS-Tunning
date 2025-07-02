@@ -8,6 +8,7 @@ const pageNames: Record<string, { title: string; subtitle: string }> = {
   "/warehouses": { title: "Bodegas", subtitle: "Administración de bodegas" },
   "/products": { title: "Productos", subtitle: "Gestión de productos" },
   "/products/movements": { title: "Movimientos", subtitle: "Alta y baja de productos" },
+  "/inventory/stock-entry": { title: "Ingreso de Productos", subtitle: "Gestión de productos por centro de costo" },
   "/users": { title: "Usuarios", subtitle: "Gestión de usuarios" },
   "/users/permissions": { title: "Permisos", subtitle: "Control de permisos" },
 };
