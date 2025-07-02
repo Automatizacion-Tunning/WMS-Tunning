@@ -27,7 +27,8 @@ The application follows a full-stack TypeScript architecture with clear separati
 - **ORM**: Drizzle ORM with TypeScript-first schema definitions
 - **Migrations**: Drizzle Kit for schema management
 - **Connection**: Azure PostgreSQL with SSL encryption
-- **Host**: tunning-innovaoper-erp.postgres.database.azure.com
+- **Host**: tunning-innovaoper-erp.postgres.database.azure.com  
+- **User**: administrador_Innovaoper (usuario fijo y correcto)
 - **Database**: WMS_Compras
 
 ## Key Components
@@ -141,4 +142,5 @@ Changelog:
 ```
 Preferred communication style: Simple, everyday language.
 Currency: Chilean Peso (CLP) - Updated system to use CLP formatting and pricing.
+Database User: ALWAYS use "administrador_Innovaoper" as username for Azure PostgreSQL connections. Never use "tunning-innovaoper-erp" which was an error.
 ```
