@@ -22,9 +22,9 @@ if (useAzure) {
     ssl: {
       rejectUnauthorized: false
     },
-    max: 10,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 20000,
+    max: 5,
+    idleTimeoutMillis: 10000,
+    connectionTimeoutMillis: 5000,
   };
   console.log(`Connecting to Azure PostgreSQL: ${process.env.AZURE_DB_HOST}/${process.env.AZURE_DB_NAME}`);
 } else {

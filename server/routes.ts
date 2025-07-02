@@ -112,20 +112,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Product routes
   app.get("/api/products", async (req, res) => {
     try {
+      console.log("🔍 GET /api/products - Query:", req.query);
+      
       // Si hay parámetro barcode, buscar por código de barras
       if (req.query.barcode) {
+        console.log("🔍 Buscando por barcode:", req.query.barcode);
         const product = await storage.getProductByBarcode(req.query.barcode as string);
         if (!product) {
+          console.log("❌ Producto no encontrado con barcode:", req.query.barcode);
           return res.status(404).json({ message: "Product not found with this barcode" });
         }
+        console.log("✅ Producto encontrado:", product.name);
         return res.json(product);
       }
       
       // Si no hay barcode, retornar todos los productos
+      console.log("📦 Obteniendo todos los productos...");
       const products = await storage.getAllProducts();
+      console.log("✅ Productos obtenidos:", products.length);
       res.json(products);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch products" });
+      console.error("❌ Error en /api/products:", error);
+      res.status(500).json({ message: "Failed to fetch products", error: error instanceof Error ? error.message : String(error) });
     }
   });
 

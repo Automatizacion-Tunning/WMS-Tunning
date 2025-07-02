@@ -255,13 +255,14 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
                   
                   <Button 
                     type="button" 
-                    variant="outline" 
-                    size="icon" 
+                    variant="secondary" 
+                    size="sm"
                     onClick={barcodeFlow.startScanning}
                     title="Escanear código de barras"
-                    className="shrink-0"
+                    className="shrink-0 px-3 bg-blue-100 hover:bg-blue-200 text-blue-700 border-blue-300"
                   >
-                    <Scan className="w-4 h-4" />
+                    <Scan className="w-4 h-4 mr-1" />
+                    📱 Código
                   </Button>
                 </div>
                 <FormMessage />
