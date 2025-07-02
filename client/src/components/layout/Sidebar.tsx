@@ -45,8 +45,7 @@ const ordersNavigation = [
 ];
 
 const userNavigation = [
-  { name: "Listado", href: "/users", icon: Users },
-  { name: "Permisos", href: "/users/permissions", icon: Shield },
+  { name: "Gestión de Usuarios", href: "/users", icon: Users },
 ];
 
 // Contenido del sidebar (compartido entre desktop y móvil)

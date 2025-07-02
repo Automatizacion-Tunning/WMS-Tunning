@@ -12,8 +12,7 @@ import CostCenterManagement from "@/pages/warehouses/CostCenterManagement";
 import ProductDetails from "@/pages/products/ProductDetails";
 import ProductMovements from "@/pages/products/ProductMovements";
 import ProductManagement from "@/pages/products/ProductManagement";
-import UserList from "@/pages/users/UserList";
-import UserPermissions from "@/pages/users/UserPermissions";
+import UserManagement from "@/pages/users/UserManagement";
 import StockEntry from "@/pages/inventory/StockEntry";
 import TransferOrders from "@/pages/orders/TransferOrders";
 import TestBarcode from "@/pages/TestBarcode";
@@ -31,8 +30,7 @@ function Router() {
         <Route path="/products/movements" component={ProductMovements} />
         <Route path="/inventory/stock-entry" component={StockEntry} />
         <Route path="/orders/transfer-orders" component={TransferOrders} />
-        <Route path="/users" component={UserList} />
-        <Route path="/users/permissions" component={UserPermissions} />
+        <Route path="/users" component={UserManagement} />
         <Route path="/test-barcode" component={TestBarcode} />
         <Route component={NotFound} />
       </Switch>

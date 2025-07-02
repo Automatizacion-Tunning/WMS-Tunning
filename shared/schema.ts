@@ -7,9 +7,16 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: varchar("username", { length: 50 }).notNull().unique(),
   password: text("password").notNull(),
-  role: varchar("role", { length: 20 }).notNull().default("user"),
+  firstName: varchar("first_name", { length: 100 }),
+  lastName: varchar("last_name", { length: 100 }),
+  email: varchar("email", { length: 255 }).unique(),
+  role: varchar("role", { length: 30 }).notNull().default("user"), // 'admin', 'project_manager', 'warehouse_operator', 'user'
+  costCenter: varchar("cost_center", { length: 100 }), // Centro de costo asignado al usuario
+  permissions: text("permissions").array(), // Array de permisos específicos
+  managedWarehouses: integer("managed_warehouses").array(), // Array de IDs de bodegas que puede gestionar
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const warehouses = pgTable("warehouses", {
@@ -211,6 +218,7 @@ export const transferOrdersRelations = relations(transferOrders, ({ one, many })
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 export const insertWarehouseSchema = createInsertSchema(warehouses).omit({
@@ -351,4 +359,66 @@ export const stockEntrySchema = z.object({
   serialNumbers: z.array(z.string().min(1, "El número de serie no puede estar vacío")).optional(),
   barcodeScanned: z.string().optional(),
   reason: z.string().optional(),
+});
+
+// Definición de permisos disponibles
+export const PERMISSIONS = {
+  // Gestión de usuarios
+  MANAGE_USERS: 'manage_users',
+  VIEW_USERS: 'view_users',
+  
+  // Gestión de productos
+  CREATE_PRODUCTS: 'create_products',
+  EDIT_PRODUCTS: 'edit_products',
+  DELETE_PRODUCTS: 'delete_products',
+  VIEW_PRODUCTS: 'view_products',
+  
+  // Gestión de inventario
+  CREATE_INVENTORY: 'create_inventory',
+  EDIT_INVENTORY: 'edit_inventory',
+  VIEW_INVENTORY: 'view_inventory',
+  
+  // Gestión de bodegas
+  CREATE_WAREHOUSES: 'create_warehouses',
+  EDIT_WAREHOUSES: 'edit_warehouses',
+  DELETE_WAREHOUSES: 'delete_warehouses',
+  VIEW_WAREHOUSES: 'view_warehouses',
+  
+  // Órdenes de transferencia
+  CREATE_TRANSFER_ORDERS: 'create_transfer_orders',
+  APPROVE_TRANSFER_ORDERS: 'approve_transfer_orders',
+  VIEW_TRANSFER_ORDERS: 'view_transfer_orders',
+  
+  // Dashboard y reportes
+  VIEW_DASHBOARD: 'view_dashboard',
+  VIEW_REPORTS: 'view_reports',
+} as const;
+
+// Roles predefinidos
+export const USER_ROLES = {
+  ADMIN: 'admin',
+  PROJECT_MANAGER: 'project_manager',
+  WAREHOUSE_OPERATOR: 'warehouse_operator',
+  USER: 'user',
+} as const;
+
+// Esquema para crear/editar usuarios
+export const userFormSchema = z.object({
+  username: z.string().min(3, "El nombre de usuario debe tener al menos 3 caracteres"),
+  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres").optional(),
+  firstName: z.string().min(1, "El nombre es requerido"),
+  lastName: z.string().min(1, "El apellido es requerido"),
+  email: z.string().email("Email inválido").optional(),
+  role: z.enum([USER_ROLES.ADMIN, USER_ROLES.PROJECT_MANAGER, USER_ROLES.WAREHOUSE_OPERATOR, USER_ROLES.USER]),
+  costCenter: z.string().optional(),
+  permissions: z.array(z.string()).optional(),
+  managedWarehouses: z.array(z.number()).optional(),
+  isActive: z.boolean().default(true),
+});
+
+// Esquema para asignar permisos
+export const assignPermissionsSchema = z.object({
+  userId: z.number().min(1, "ID de usuario requerido"),
+  permissions: z.array(z.string()),
+  managedWarehouses: z.array(z.number()).optional(),
 });

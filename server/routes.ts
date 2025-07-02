@@ -590,6 +590,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User management routes
+  app.get("/api/users", async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users.map(user => ({ ...user, password: undefined }))); // No enviar contraseñas
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.get("/api/users/:id", async (req, res) => {
+    try {
+      const user = await storage.getUser(parseInt(req.params.id));
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json({ ...user, password: undefined }); // No enviar contraseñas
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  app.post("/api/users", async (req, res) => {
+    try {
+      const validatedData = req.body; // TODO: Add validation with userFormSchema
+      const user = await storage.createUser(validatedData);
+      res.status(201).json({ ...user, password: undefined });
+    } catch (error) {
+      res.status(400).json({ message: "Invalid user data", error });
+    }
+  });
+
+  app.put("/api/users/:id", async (req, res) => {
+    try {
+      const validatedData = req.body; // TODO: Add validation
+      const user = await storage.updateUser(parseInt(req.params.id), validatedData);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json({ ...user, password: undefined });
+    } catch (error) {
+      res.status(400).json({ message: "Invalid user data", error });
+    }
+  });
+
+  app.delete("/api/users/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteUser(parseInt(req.params.id));
+      if (!success) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  // Get users by role
+  app.get("/api/users/role/:role", async (req, res) => {
+    try {
+      const users = await storage.getUsersByRole(req.params.role);
+      res.json(users.map(user => ({ ...user, password: undefined })));
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch users by role" });
+    }
+  });
+
+  // Get project managers
+  app.get("/api/project-managers", async (req, res) => {
+    try {
+      const managers = await storage.getProjectManagers();
+      res.json(managers.map(user => ({ ...user, password: undefined })));
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch project managers" });
+    }
+  });
+
+  // Assign permissions to user
+  app.put("/api/users/:id/permissions", async (req, res) => {
+    try {
+      const { permissions, managedWarehouses } = req.body;
+      const user = await storage.assignPermissions(
+        parseInt(req.params.id), 
+        permissions, 
+        managedWarehouses
+      );
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json({ ...user, password: undefined });
+    } catch (error) {
+      res.status(400).json({ message: "Failed to assign permissions", error });
+    }
+  });
+
+  // Check user permission
+  app.get("/api/users/:id/permissions/:permission", async (req, res) => {
+    try {
+      const hasPermission = await storage.checkUserPermission(
+        parseInt(req.params.id), 
+        req.params.permission
+      );
+      res.json({ hasPermission });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to check permission" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

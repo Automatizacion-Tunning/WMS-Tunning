@@ -21,6 +21,12 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
+  getUsersByRole(role: string): Promise<User[]>;
+  getUsersByCostCenter(costCenter: string): Promise<User[]>;
+  assignPermissions(userId: number, permissions: string[], managedWarehouses?: number[]): Promise<User | undefined>;
+  checkUserPermission(userId: number, permission: string): Promise<boolean>;
+  getProjectManagers(): Promise<User[]>;
+  deleteUser(id: number): Promise<boolean>;
 
   // Warehouses
   getWarehouse(id: number): Promise<Warehouse | undefined>;
@@ -113,6 +119,57 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users).orderBy(asc(users.username));
+  }
+
+  async getUsersByRole(role: string): Promise<User[]> {
+    return await db.select().from(users)
+      .where(and(eq(users.role, role), eq(users.isActive, true)))
+      .orderBy(asc(users.username));
+  }
+
+  async getUsersByCostCenter(costCenter: string): Promise<User[]> {
+    return await db.select().from(users)
+      .where(and(eq(users.costCenter, costCenter), eq(users.isActive, true)))
+      .orderBy(asc(users.username));
+  }
+
+  async assignPermissions(userId: number, permissions: string[], managedWarehouses?: number[]): Promise<User | undefined> {
+    const updateData: any = {
+      permissions: permissions,
+    };
+    
+    if (managedWarehouses) {
+      updateData.managedWarehouses = managedWarehouses;
+    }
+
+    const [user] = await db.update(users)
+      .set(updateData)
+      .where(eq(users.id, userId))
+      .returning();
+    return user || undefined;
+  }
+
+  async checkUserPermission(userId: number, permission: string): Promise<boolean> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (!user || !user.permissions) return false;
+    
+    // Los admins tienen todos los permisos
+    if (user.role === 'admin') return true;
+    
+    return user.permissions.includes(permission);
+  }
+
+  async getProjectManagers(): Promise<User[]> {
+    return await db.select().from(users)
+      .where(and(eq(users.role, 'project_manager'), eq(users.isActive, true)))
+      .orderBy(asc(users.username));
+  }
+
+  async deleteUser(id: number): Promise<boolean> {
+    const result = await db.update(users)
+      .set({ isActive: false })
+      .where(eq(users.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
   // Warehouses
