@@ -44,48 +44,57 @@ export default function BarcodeScannerNative({
   const startCamera = useCallback(async () => {
     try {
       setError(null);
+      console.log('🎥 Iniciando cámara...');
+      
+      // Limpiar cualquier instancia previa
+      if (readerRef.current) {
+        readerRef.current.reset();
+      }
+      
+      // Verificar soporte del navegador
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Su navegador no soporta el acceso a la cámara');
+      }
+
+      // Solicitar acceso a la cámara primero
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: 'environment', // Preferir cámara trasera
+          width: { min: 640, ideal: 1280, max: 1920 },
+          height: { min: 480, ideal: 720, max: 1080 }
+        } 
+      });
+      
+      streamRef.current = stream;
+      
+      // Asignar el stream al video element
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      
+      console.log('✅ Cámara iniciada correctamente');
       
       // Inicializar el lector ZXing
       const codeReader = new BrowserMultiFormatReader();
       readerRef.current = codeReader;
 
-      // Obtener dispositivos de video disponibles
-      const videoInputDevices = await codeReader.listVideoInputDevices();
-      
-      if (videoInputDevices.length === 0) {
-        throw new Error('No se encontró ninguna cámara');
-      }
-
-      // Preferir cámara trasera si está disponible
-      let selectedDevice = videoInputDevices[0];
-      for (const device of videoInputDevices) {
-        if (device.label.toLowerCase().includes('back') || 
-            device.label.toLowerCase().includes('rear') ||
-            device.label.toLowerCase().includes('environment')) {
-          selectedDevice = device;
-          break;
-        }
-      }
-
-      setScanningDevice(selectedDevice.deviceId);
-
-      // Iniciar el escaneo
-      await codeReader.decodeFromVideoDevice(
-        selectedDevice.deviceId,
+      // Iniciar el escaneo continuo desde el video element
+      await codeReader.decodeFromVideoElement(
         videoRef.current!,
         (result, err) => {
           if (result) {
             // Código detectado exitosamente
             const detectedCode = result.getText();
-            console.log('Código detectado:', detectedCode);
-            console.log('🔥 Llamando onScan con código:', detectedCode);
+            console.log('✅ Código detectado:', detectedCode);
             
-            // Solo llamar onScan, NO cerrar automáticamente
-            // El componente padre decidirá cuándo cerrar
-            onScan(detectedCode);
-            
-            // Detener la cámara pero no cerrar el modal
-            stopCamera();
+            if (detectedCode && detectedCode.trim()) {
+              // Llamar onScan con el código detectado
+              onScan(detectedCode.trim());
+              
+              // Detener la cámara después de detectar el código
+              stopCamera();
+            }
           }
           if (err && !(err.name === 'NotFoundException')) {
             // Solo mostrar errores que no sean "código no encontrado"
@@ -102,27 +111,49 @@ export default function BarcodeScannerNative({
       setHasCamera(false);
       
       if (err.name === 'NotAllowedError') {
-        setError("Acceso a la cámara denegado. Por favor, permita el acceso a la cámara y recargue la página.");
+        setError("Acceso a la cámara denegado. Por favor, permita el acceso a la cámara en su navegador.");
       } else if (err.name === 'NotFoundError') {
         setError("No se encontró ninguna cámara en el dispositivo.");
       } else if (err.name === 'NotSupportedError') {
         setError("El navegador no soporta el acceso a la cámara.");
+      } else if (err.message?.includes('no soporta')) {
+        setError("Su navegador no soporta el acceso a la cámara.");
       } else {
         setError(`Error al acceder a la cámara: ${err.message || 'Error desconocido'}`);
       }
     }
-  }, [onScan, onClose, stopCamera]);
+  }, [onScan, stopCamera]);
 
 
 
   // Verificar soporte de cámara
   useEffect(() => {
-    if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      setHasCamera(true);
-    } else {
-      setHasCamera(false);
-      setError("Su navegador no soporta el acceso a la cámara.");
-    }
+    const checkCameraSupport = async () => {
+      try {
+        if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setHasCamera(false);
+          setError("Su navegador no soporta el acceso a la cámara.");
+          return;
+        }
+
+        // Verificar permisos de cámara
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        
+        if (videoDevices.length === 0) {
+          setHasCamera(false);
+          setError("No se encontró ninguna cámara en el dispositivo.");
+        } else {
+          setHasCamera(true);
+        }
+      } catch (err) {
+        console.error('Error verificando soporte de cámara:', err);
+        setHasCamera(false);
+        setError("Error al verificar el acceso a la cámara.");
+      }
+    };
+
+    checkCameraSupport();
   }, []);
 
   // Iniciar cámara cuando se abre el diálogo
