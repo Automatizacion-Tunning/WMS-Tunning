@@ -1,9 +1,6 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from "ws";
+import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from "@shared/schema";
-
-neonConfig.webSocketConstructor = ws;
 
 // Usar Azure PostgreSQL como estaba configurado ayer
 if (!process.env.AZURE_DB_HOST || !process.env.AZURE_DB_USER || !process.env.AZURE_DB_PASSWORD || !process.env.AZURE_DB_NAME) {
