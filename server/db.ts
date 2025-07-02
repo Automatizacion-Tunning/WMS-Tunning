@@ -10,7 +10,7 @@ if (!process.env.AZURE_DB_HOST || !process.env.AZURE_DB_USER || !process.env.AZU
 const connectionConfig = {
   host: process.env.AZURE_DB_HOST,
   port: parseInt(process.env.AZURE_DB_PORT || '5432'),
-  user: process.env.AZURE_DB_USER,
+  user: 'administrador_Innovaoper', // Usuario correcto de Azure PostgreSQL
   password: process.env.AZURE_DB_PASSWORD,
   database: process.env.AZURE_DB_NAME,
   ssl: {
