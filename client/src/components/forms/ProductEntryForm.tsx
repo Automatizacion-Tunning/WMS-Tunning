@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { productEntrySchema, type Product } from "@shared/schema";
 import { z } from "zod";
-import { Plus, X, Package, Building2, QrCode } from "lucide-react";
+import { Plus, X, Package, Building2, Scan } from "lucide-react";
 import { useBarcodeFlow } from "@/hooks/useBarcodeFlow";
 import BarcodeScannerNative from "@/components/ui/barcode-scanner-native";
 import ProductNotFoundModal from "@/components/modals/ProductNotFoundModal";
@@ -260,7 +260,7 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
                       title="Escanear código de barras"
                       className="shrink-0"
                     >
-                      <QrCode className="w-4 h-4" />
+                      <Scan className="w-4 h-4" />
                     </Button>
                   </div>
                 </FormControl>
@@ -401,7 +401,7 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
         isOpen={barcodeFlow.state === "scanning"}
         onClose={barcodeFlow.handleCancel}
         onScan={handleBarcodeScanned}
-        title="Escanear Código de Producto"
+        title="Escanear Código de Barras"
         description="Apunta la cámara hacia el código de barras del producto"
       />
 

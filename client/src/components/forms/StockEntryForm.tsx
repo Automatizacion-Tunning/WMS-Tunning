@@ -17,7 +17,7 @@ import AssociateProductModal from "@/components/modals/AssociateProductModal";
 import NewProductWithBarcodeForm from "@/components/forms/NewProductWithBarcodeForm";
 import { useBarcodeFlow } from "@/hooks/useBarcodeFlow";
 import { z } from "zod";
-import { Plus, X, QrCode, Scan, Package } from "lucide-react";
+import { Plus, X, Scan, Package } from "lucide-react";
 
 type StockEntryData = z.infer<typeof warehouseEntrySchema>;
 
