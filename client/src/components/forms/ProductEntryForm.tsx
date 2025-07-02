@@ -235,34 +235,33 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
                   Producto
                 </FormLabel>
                 <FormControl>
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <Select 
-                        value={field.value?.toString()} 
-                        onValueChange={(value) => field.onChange(parseInt(value))}
-                      >
-                        <SelectTrigger className="flex-1">
-                          <SelectValue placeholder="Seleccionar producto" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {products.map((product) => (
-                            <SelectItem key={product.id} value={product.id.toString()}>
-                              {product.name} ({product.sku})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        size="icon" 
-                        onClick={barcodeFlow.startScanning}
-                        title="Escanear código de barras"
-                      >
-                        <QrCode className="w-4 h-4" />
-                      </Button>
-                    </div>
+                  <div className="flex gap-2 w-full">
+                    <Select 
+                      value={field.value?.toString()} 
+                      onValueChange={(value) => field.onChange(parseInt(value))}
+                    >
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Seleccionar producto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {products.map((product) => (
+                          <SelectItem key={product.id} value={product.id.toString()}>
+                            {product.name} ({product.sku})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="icon" 
+                      onClick={barcodeFlow.startScanning}
+                      title="Escanear código de barras"
+                      className="shrink-0"
+                    >
+                      <QrCode className="w-4 h-4" />
+                    </Button>
                   </div>
                 </FormControl>
                 <FormMessage />
