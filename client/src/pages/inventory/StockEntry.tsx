@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Package, TrendingUp, AlertTriangle, Building2 } from "lucide-react";
-import ProductEntryForm from "@/components/forms/ProductEntryForm";
+import SimpleProductEntryForm from "@/components/forms/SimpleProductEntryForm";
 
 export default function StockEntry() {
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -29,7 +29,7 @@ export default function StockEntry() {
             <DialogHeader>
               <DialogTitle>Ingreso de Producto</DialogTitle>
             </DialogHeader>
-            <ProductEntryForm onSuccess={() => setIsEntryModalOpen(false)} />
+            <SimpleProductEntryForm onSuccess={() => setIsEntryModalOpen(false)} />
           </DialogContent>
         </Dialog>
       </div>
