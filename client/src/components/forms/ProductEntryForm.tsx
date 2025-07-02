@@ -38,8 +38,18 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
     queryKey: ["/api/products"],
   });
 
-  // Centros de costo predefinidos (temporalmente hasta corregir las consultas)
-  const costCenters = ["CC252130", "CC252131", "CC252132", "CC252133"];
+  // Obtener centros de costo dinámicamente
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ["/api/warehouses"],
+  });
+
+  // Extraer centros de costo únicos de las bodegas
+  const costCenters = (warehouses as any[])
+    .map((w: any) => w.costCenter)
+    .filter(Boolean)
+    .reduce((unique: string[], center: string) => {
+      return unique.includes(center) ? unique : [...unique, center];
+    }, []);
 
   const form = useForm<ProductEntryData>({
     resolver: zodResolver(productEntrySchema),
