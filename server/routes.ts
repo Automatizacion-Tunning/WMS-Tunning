@@ -144,6 +144,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/products", async (req, res) => {
     try {
       const validatedData = insertProductSchema.parse(req.body);
+      
+      // Verificar si el código de barras ya existe (si se proporciona)
+      if (validatedData.barcode && validatedData.barcode.trim() !== "") {
+        const existingProduct = await storage.getProductByBarcode(validatedData.barcode);
+        if (existingProduct) {
+          return res.status(409).json({ 
+            message: "Barcode already associated with another product",
+            existingProduct: {
+              id: existingProduct.id,
+              name: existingProduct.name,
+              sku: existingProduct.sku
+            }
+          });
+        }
+      }
+      
       const product = await storage.createProduct(validatedData);
       res.status(201).json(product);
     } catch (error) {

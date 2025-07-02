@@ -14,6 +14,9 @@ import { z } from "zod";
 import { Plus, X, Package, Building2, QrCode } from "lucide-react";
 import { useBarcodeFlow } from "@/hooks/useBarcodeFlow";
 import BarcodeScannerNative from "@/components/ui/barcode-scanner-native";
+import ProductNotFoundModal from "@/components/modals/ProductNotFoundModal";
+import AssociateProductModal from "@/components/modals/AssociateProductModal";
+import NewProductWithBarcodeForm from "@/components/forms/NewProductWithBarcodeForm";
 
 type ProductEntryData = z.infer<typeof productEntrySchema>;
 
@@ -397,29 +400,48 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
         description="Apunta la cámara hacia el código de barras del producto"
       />
 
-      {/* Modales del flujo de códigos de barras */}
-      {/* Modales de código de barras - temporalmente deshabilitados hasta corregir interfaces */}
+      {/* Modales del flujo completo de códigos de barras */}
+      <ProductNotFoundModal
+        isOpen={barcodeFlow.state === "product-not-found"}
+        onClose={barcodeFlow.handleCancel}
+        barcode={barcodeFlow.barcode || ""}
+        onCreateNew={barcodeFlow.handleCreateNew}
+        onAssociateExisting={barcodeFlow.handleAssociateExisting}
+      />
+
+      <AssociateProductModal
+        isOpen={barcodeFlow.state === "associating-existing"}
+        onClose={barcodeFlow.handleCancel}
+        barcode={barcodeFlow.barcode || ""}
+        onSuccess={barcodeFlow.handleProductAssociated}
+      />
+
+      <NewProductWithBarcodeForm
+        isOpen={barcodeFlow.state === "creating-new"}
+        onClose={barcodeFlow.handleCancel}
+        barcode={barcodeFlow.barcode || ""}
+        onSuccess={barcodeFlow.handleProductCreated}
+      />
+
+      {/* Notificación cuando producto es encontrado */}
       {barcodeFlow.state === "product-found" && barcodeFlow.product && (
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
           <p className="text-green-800 text-sm">
             ✅ Producto encontrado: <strong>{barcodeFlow.product.name}</strong> (SKU: {barcodeFlow.product.sku})
-          </p>
-        </div>
-      )}
-      
-      {barcodeFlow.state === "product-not-found" && (
-        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-yellow-800 text-sm">
-            ⚠️ Código de barras no encontrado: <strong>{barcodeFlow.barcode}</strong>
           </p>
           <Button 
             type="button" 
             variant="outline" 
             size="sm" 
             className="mt-2"
-            onClick={barcodeFlow.reset}
+            onClick={() => {
+              if (barcodeFlow.product) {
+                form.setValue("productId", barcodeFlow.product.id);
+                barcodeFlow.reset();
+              }
+            }}
           >
-            Intentar de nuevo
+            Usar este producto
           </Button>
         </div>
       )}
