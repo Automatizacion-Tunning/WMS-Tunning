@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,7 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { productEntrySchema, type Product } from "@shared/schema";
 import { z } from "zod";
-import { Plus, X, Package, Building2 } from "lucide-react";
+import { Plus, X, Package, Building2, Scan } from "lucide-react";
+import { useBarcodeFlow } from "@/hooks/useBarcodeFlow";
+import BarcodeScanner from "@/components/ui/barcode-scanner-native";
+import ProductNotFoundModal from "@/components/modals/ProductNotFoundModal";
+import AssociateProductModal from "@/components/modals/AssociateProductModal";
+import NewProductWithBarcodeForm from "@/components/forms/NewProductWithBarcodeForm";
 
 type ProductEntryData = z.infer<typeof productEntrySchema>;
 
@@ -47,6 +52,17 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
   });
 
   const selectedProduct = products.find(p => p.id === form.watch("productId"));
+
+  // Barcode flow hook
+  const barcodeFlow = useBarcodeFlow();
+
+  // Effect to auto-select product when found via barcode
+  useEffect(() => {
+    if (barcodeFlow.state === "product-found" && barcodeFlow.product) {
+      form.setValue("productId", barcodeFlow.product.id);
+      barcodeFlow.reset();
+    }
+  }, [barcodeFlow.state, barcodeFlow.product, form]);
 
   // Mutación para el ingreso de producto
   const entryMutation = useMutation({
@@ -177,23 +193,36 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
                   <Package className="w-4 h-4" />
                   Producto
                 </FormLabel>
-                <FormControl>
-                  <Select 
-                    value={field.value?.toString()} 
-                    onValueChange={(value) => field.onChange(parseInt(value))}
+                <div className="flex gap-2 w-full items-center">
+                  <FormControl className="flex-1">
+                    <Select 
+                      value={field.value?.toString()} 
+                      onValueChange={(value) => field.onChange(parseInt(value))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar producto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {products.map((product) => (
+                          <SelectItem key={product.id} value={product.id.toString()}>
+                            {product.name} ({product.sku})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  
+                  <Button 
+                    type="button" 
+                    size="default"
+                    onClick={barcodeFlow.startScanning}
+                    title="Escanear código de barras"
+                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold border-2 border-blue-700 min-w-[120px]"
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar producto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id.toString()}>
-                          {product.name} ({product.sku})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormControl>
+                    <Scan className="w-4 h-4 mr-1" />
+                    📱 Código
+                  </Button>
+                </div>
                 <FormMessage />
               </FormItem>
             )}
@@ -325,6 +354,38 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
           </div>
         </form>
       </Form>
+
+      {/* Barcode Scanner Component */}
+      <BarcodeScanner 
+        isOpen={barcodeFlow.state === "scanning"}
+        onClose={barcodeFlow.handleCancel}
+        onScan={barcodeFlow.handleBarcodeScanned}
+      />
+
+      {/* Product Not Found Modal */}
+      <ProductNotFoundModal
+        isOpen={barcodeFlow.state === "product-not-found"}
+        onClose={barcodeFlow.handleCancel}
+        barcode={barcodeFlow.barcode || ""}
+        onCreateNew={() => barcodeFlow.handleCreateNew()}
+        onAssociateExisting={() => barcodeFlow.handleAssociateExisting()}
+      />
+
+      {/* Create New Product Modal */}
+      <NewProductWithBarcodeForm
+        isOpen={barcodeFlow.state === "creating-new"}
+        onClose={barcodeFlow.handleCancel}
+        barcode={barcodeFlow.barcode || ""}
+        onSuccess={barcodeFlow.handleProductCreated}
+      />
+
+      {/* Associate Existing Product Modal */}
+      <AssociateProductModal
+        isOpen={barcodeFlow.state === "associating-existing"}
+        onClose={barcodeFlow.handleCancel}
+        barcode={barcodeFlow.barcode || ""}
+        onSuccess={barcodeFlow.handleProductAssociated}
+      />
     </div>
   );
 }
