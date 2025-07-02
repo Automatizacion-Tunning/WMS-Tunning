@@ -26,7 +26,9 @@ The application follows a full-stack TypeScript architecture with clear separati
 ### Database Architecture
 - **ORM**: Drizzle ORM with TypeScript-first schema definitions
 - **Migrations**: Drizzle Kit for schema management
-- **Connection**: Serverless PostgreSQL via Neon Database
+- **Connection**: Azure PostgreSQL with SSL encryption
+- **Host**: tunning-innovaoper-erp.postgres.database.azure.com
+- **Database**: WMS_Compras
 
 ## Key Components
 
@@ -122,6 +124,16 @@ Changelog:
   * Created main warehouse with sub-warehouses (UM2, PLATAFORMA, PEM, INTEGRADOR)
   * Updated warehouse management interface with hierarchy visualization
   * Populated sample data with proper warehouse structure
+- July 02, 2025. Migrated to Azure PostgreSQL database
+  * Successfully connected to Azure PostgreSQL with SSL encryption
+  * Migrated all existing data (users, warehouses, products, inventory)
+  * Updated database configuration with Azure credentials
+  * Application now runs 100% on Azure infrastructure
+- July 02, 2025. Enhanced warehouse management interface
+  * Added comprehensive warehouse management screen with filtering
+  * Implemented clickable warehouse cards with detailed product views
+  * Added filters by cost center and warehouse with search functionality
+  * Created detailed modal views showing complete inventory per warehouse
 ```
 
 ## User Preferences
