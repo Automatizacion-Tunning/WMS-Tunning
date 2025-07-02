@@ -5,7 +5,7 @@ import { MobileSidebarTrigger } from "./Sidebar";
 
 const pageNames: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Dashboard", subtitle: "Resumen general del inventario" },
-  "/warehouses": { title: "Bodegas", subtitle: "Administración de bodegas" },
+  "/warehouses": { title: "Gestión de Bodegas", subtitle: "Bodegas con productos por centro de costo" },
   "/products": { title: "Productos", subtitle: "Gestión de productos" },
   "/products/movements": { title: "Movimientos", subtitle: "Alta y baja de productos" },
   "/inventory/stock-entry": { title: "Ingreso de Productos", subtitle: "Gestión de productos por centro de costo" },
