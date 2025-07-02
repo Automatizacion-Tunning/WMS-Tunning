@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,7 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { productEntrySchema, type Product } from "@shared/schema";
 import { z } from "zod";
-import { Plus, X, Package, Building2 } from "lucide-react";
+import { Plus, X, Package, Building2, QrCode, Scan } from "lucide-react";
+import BarcodeScannerNative from "@/components/ui/barcode-scanner-native";
+import { useBarcodeFlow } from "@/hooks/useBarcodeFlow";
+import ProductNotFoundModal from "@/components/modals/ProductNotFoundModal";
+import AssociateProductModal from "@/components/modals/AssociateProductModal";
+import NewProductWithBarcodeForm from "@/components/forms/NewProductWithBarcodeForm";
 
 type ProductEntryData = z.infer<typeof productEntrySchema>;
 
@@ -25,9 +30,25 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
   const queryClient = useQueryClient();
   const [serialNumbers, setSerialNumbers] = useState<string[]>([]);
   const [serialInput, setSerialInput] = useState("");
+  
+  // Hook para el flujo de códigos de barras
+  const barcodeFlow = useBarcodeFlow();
 
   const { data: products = [] } = useQuery<Product[]>({
     queryKey: ["/api/products"],
+  });
+
+  // Mutación para crear centro de costo
+  const createCostCenterMutation = useMutation({
+    mutationFn: async (costCenterData: { costCenter: string; location?: string }) => {
+      const response = await fetch("/api/cost-centers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(costCenterData),
+      });
+      if (!response.ok) throw new Error("Error al crear centro de costo");
+      return response.json();
+    },
   });
 
   // Centros de costo predefinidos (temporalmente hasta corregir las consultas)
@@ -230,15 +251,34 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
                         </SelectContent>
                       </Select>
                       
-                      <BarcodeScannerNative
-                        onBarcodeScanned={handleBarcodeScanned}
-                        trigger={
-                          <Button type="button" variant="outline" size="icon">
-                            <QrCode className="w-4 h-4" />
-                          </Button>
-                        }
-                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={barcodeFlow.startScanning}
+                        className="shrink-0"
+                        title="Escanear código de barras"
+                      >
+                        <QrCode className="w-4 h-4" />
+                      </Button>
                     </div>
+                    
+                    {/* Estado del flujo de códigos de barras */}
+                    {barcodeFlow.barcode && (
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Package className="w-4 h-4" />
+                          <span className="text-muted-foreground">Código:</span>
+                          <span className="font-mono font-semibold">{barcodeFlow.barcode}</span>
+                          {barcodeFlow.state === "searching" && (
+                            <span className="text-muted-foreground">Buscando...</span>
+                          )}
+                          {barcodeFlow.product && (
+                            <span className="text-green-600">✓ {barcodeFlow.product.name}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </FormControl>
                 <FormMessage />
@@ -373,7 +413,16 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
         </form>
       </Form>
 
-      {/* Modales del flujo de códigos de barras */}
+      {/* Escáner de códigos de barras */}
+      <BarcodeScannerNative
+        isOpen={barcodeFlow.state === "scanning"}
+        onClose={barcodeFlow.handleCancel}
+        onScan={barcodeFlow.handleBarcodeScanned}
+        title="Escanear Código de Barras"
+        description="Apunta la cámara hacia el código de barras del producto"
+      />
+
+      {/* Modal para producto no encontrado */}
       <ProductNotFoundModal
         isOpen={barcodeFlow.state === "product-not-found"}
         barcode={barcodeFlow.barcode || ""}
@@ -384,24 +433,18 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
 
       <AssociateProductModal
         isOpen={barcodeFlow.state === "associating-existing"}
-        barcode={barcodeFlow.barcode || ""}
-        products={products}
-        onAssociate={barcodeFlow.handleProductAssociated}
         onClose={barcodeFlow.handleCancel}
+        barcode={barcodeFlow.barcode || ""}
+        onSuccess={barcodeFlow.handleProductAssociated}
       />
 
-      {barcodeFlow.state === "creating-new" && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background p-6 rounded-lg max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Crear Nuevo Producto</h3>
-            <NewProductWithBarcodeForm
-              barcode={barcodeFlow.barcode || ""}
-              onSuccess={barcodeFlow.handleProductCreated}
-              onCancel={barcodeFlow.handleCancel}
-            />
-          </div>
-        </div>
-      )}
+      {/* Modal para crear nuevo producto */}
+      <NewProductWithBarcodeForm
+        isOpen={barcodeFlow.state === "creating-new"}
+        onClose={barcodeFlow.handleCancel}
+        barcode={barcodeFlow.barcode || ""}
+        onSuccess={barcodeFlow.handleProductCreated}
+      />
     </div>
   );
 }
