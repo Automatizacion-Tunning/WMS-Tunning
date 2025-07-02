@@ -234,8 +234,8 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
                   <Package className="w-4 h-4" />
                   Producto
                 </FormLabel>
-                <FormControl>
-                  <div className="flex gap-2 w-full">
+                <div className="flex gap-2 w-full">
+                  <FormControl>
                     <Select 
                       value={field.value?.toString()} 
                       onValueChange={(value) => field.onChange(parseInt(value))}
@@ -251,19 +251,19 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
                         ))}
                       </SelectContent>
                     </Select>
-                    
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="icon" 
-                      onClick={barcodeFlow.startScanning}
-                      title="Escanear código de barras"
-                      className="shrink-0"
-                    >
-                      <Scan className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </FormControl>
+                  </FormControl>
+                  
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={barcodeFlow.startScanning}
+                    title="Escanear código de barras"
+                    className="shrink-0"
+                  >
+                    <Scan className="w-4 h-4" />
+                  </Button>
+                </div>
                 <FormMessage />
               </FormItem>
             )}
