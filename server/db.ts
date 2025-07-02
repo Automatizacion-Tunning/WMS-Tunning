@@ -5,6 +5,10 @@ import * as schema from "@shared/schema";
 // Azure PostgreSQL configuration
 const useAzure = process.env.AZURE_DB_HOST && process.env.AZURE_DB_USER && process.env.AZURE_DB_PASSWORD && process.env.AZURE_DB_NAME;
 
+console.log('🔍 Verificando configuración de base de datos...');
+console.log(`Azure habilitado: ${useAzure ? 'Sí' : 'No'}`);
+console.log(`DATABASE_URL disponible: ${process.env.DATABASE_URL ? 'Sí' : 'No'}`);
+
 let connectionConfig;
 
 if (useAzure) {
@@ -13,7 +17,7 @@ if (useAzure) {
     host: process.env.AZURE_DB_HOST,
     port: parseInt(process.env.AZURE_DB_PORT || '5432'),
     database: process.env.AZURE_DB_NAME,
-    user: 'administrador_Innovaoper', // Usuario correcto según VS Code
+    user: process.env.AZURE_DB_USER,
     password: process.env.AZURE_DB_PASSWORD,
     ssl: {
       rejectUnauthorized: false
