@@ -4,7 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Package, MapPin, Search, Filter } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Package, MapPin, Search, Filter, Eye, X } from "lucide-react";
 import { Warehouse, InventoryWithDetails } from "@shared/schema";
 
 interface WarehouseWithInventory extends Warehouse {
@@ -17,6 +20,7 @@ export default function WarehouseManagement() {
   const [selectedCostCenter, setSelectedCostCenter] = useState<string>("all");
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedWarehouseDetail, setSelectedWarehouseDetail] = useState<WarehouseWithInventory | null>(null);
 
   // Obtener todas las bodegas
   const { data: warehouses = [], isLoading: warehousesLoading } = useQuery<Warehouse[]>({
@@ -167,7 +171,11 @@ export default function WarehouseManagement() {
       {/* Lista de Bodegas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredWarehouses.map(warehouse => (
-          <Card key={warehouse.id} className="hover:shadow-md transition-shadow">
+          <Card 
+            key={warehouse.id} 
+            className="hover:shadow-md transition-shadow cursor-pointer"
+            onClick={() => setSelectedWarehouseDetail(warehouse)}
+          >
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
@@ -214,7 +222,10 @@ export default function WarehouseManagement() {
               {/* Lista de productos (los primeros 3) */}
               {warehouse.inventory.length > 0 && (
                 <div className="pt-4 border-t">
-                  <div className="text-sm font-medium mb-2">Productos:</div>
+                  <div className="text-sm font-medium mb-2 flex items-center justify-between">
+                    Productos:
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  </div>
                   <div className="space-y-1">
                     {warehouse.inventory.slice(0, 3).map(inv => (
                       <div key={inv.id} className="flex justify-between text-xs">
@@ -227,8 +238,8 @@ export default function WarehouseManagement() {
                       </div>
                     ))}
                     {warehouse.inventory.length > 3 && (
-                      <div className="text-xs text-muted-foreground">
-                        ... y {warehouse.inventory.length - 3} más
+                      <div className="text-xs text-blue-600 font-medium">
+                        Clic para ver {warehouse.inventory.length - 3} productos más
                       </div>
                     )}
                   </div>
@@ -256,6 +267,131 @@ export default function WarehouseManagement() {
           </CardContent>
         </Card>
       )}
+
+      {/* Modal de Detalle de Bodega */}
+      <Dialog open={!!selectedWarehouseDetail} onOpenChange={() => setSelectedWarehouseDetail(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Package className="h-6 w-6" />
+                Detalle de {selectedWarehouseDetail?.name}
+              </div>
+              <Badge variant={selectedWarehouseDetail?.warehouseType === "main" ? "default" : "secondary"}>
+                {selectedWarehouseDetail?.warehouseType === "main" ? "PRINCIPAL" : selectedWarehouseDetail?.subWarehouseType?.toUpperCase() || "SUB"}
+              </Badge>
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedWarehouseDetail && (
+            <div className="space-y-6">
+              {/* Información general */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {selectedWarehouseDetail.inventoryCount}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Productos Diferentes
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {selectedWarehouseDetail.inventory.reduce((sum, inv) => sum + inv.quantity, 0)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Total Unidades
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <div className="text-sm text-muted-foreground">Centro de Costo</div>
+                      <div className="font-bold">{selectedWarehouseDetail.costCenter}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {selectedWarehouseDetail.location || "Sin ubicación"}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Tabla de productos */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Productos en Inventario</h3>
+                {selectedWarehouseDetail.inventory.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-8 text-center">
+                      <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">Esta bodega no tiene productos en inventario</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Producto</TableHead>
+                          <TableHead>SKU</TableHead>
+                          <TableHead>Código de Barras</TableHead>
+                          <TableHead className="text-center">Cantidad</TableHead>
+                          <TableHead className="text-center">Stock Mínimo</TableHead>
+                          <TableHead className="text-center">Estado</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedWarehouseDetail.inventory.map(inv => (
+                          <TableRow key={inv.id}>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{inv.product.name}</div>
+                                {inv.product.description && (
+                                  <div className="text-sm text-muted-foreground truncate max-w-xs">
+                                    {inv.product.description}
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">
+                              {inv.product.sku}
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">
+                              {inv.product.barcode || "Sin código"}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <span className="font-bold">{inv.quantity}</span>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {inv.product.minStock}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge 
+                                variant={inv.quantity <= inv.product.minStock ? "destructive" : "default"}
+                              >
+                                {inv.quantity <= inv.product.minStock ? "Stock Bajo" : "Normal"}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
