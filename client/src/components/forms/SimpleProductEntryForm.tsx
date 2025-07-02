@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,7 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { productEntrySchema, type Product } from "@shared/schema";
 import { z } from "zod";
-import { Plus, X, Package, Building2 } from "lucide-react";
+import { Plus, X, Package, Building2, Scan, QrCode } from "lucide-react";
+import BarcodeScannerNative from "@/components/ui/barcode-scanner-native";
+import { useBarcodeFlow } from "@/hooks/useBarcodeFlow";
+import ProductNotFoundModal from "@/components/modals/ProductNotFoundModal";
+import AssociateProductModal from "@/components/modals/AssociateProductModal";
+import NewProductWithBarcodeForm from "@/components/forms/NewProductWithBarcodeForm";
 
 type ProductEntryData = z.infer<typeof productEntrySchema>;
 
@@ -25,6 +30,36 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
   const queryClient = useQueryClient();
   const [serialNumbers, setSerialNumbers] = useState<string[]>([]);
   const [serialInput, setSerialInput] = useState("");
+  
+  // Hook para el flujo de códigos de barras
+  const barcodeFlow = useBarcodeFlow();
+  
+  // Mutación para crear centro de costo
+  const createCostCenterMutation = useMutation({
+    mutationFn: async (costCenterData: { costCenter: string; location?: string }) => {
+      const response = await fetch("/api/cost-centers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(costCenterData),
+      });
+      if (!response.ok) throw new Error("Error al crear centro de costo");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Centro de costo creado",
+        description: "El centro de costo y sus bodegas se crearon exitosamente.",
+      });
+    },
+  });
+
+  // Efecto para manejar el flujo de códigos de barras
+  useEffect(() => {
+    if (barcodeFlow.state === "product-found" && barcodeFlow.product) {
+      form.setValue("productId", barcodeFlow.product.id);
+      barcodeFlow.reset();
+    }
+  }, [barcodeFlow.state, barcodeFlow.product]);
 
   const { data: products = [] } = useQuery<Product[]>({
     queryKey: ["/api/products"],
@@ -167,7 +202,7 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
             )}
           />
 
-          {/* Selector de Producto */}
+          {/* Selector de Producto con Código de Barras */}
           <FormField
             control={form.control}
             name="productId"
@@ -178,21 +213,53 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
                   Producto
                 </FormLabel>
                 <FormControl>
-                  <Select 
-                    value={field.value?.toString()} 
-                    onValueChange={(value) => field.onChange(parseInt(value))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar producto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id.toString()}>
-                          {product.name} ({product.sku})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Select 
+                        value={field.value?.toString()} 
+                        onValueChange={(value) => field.onChange(parseInt(value))}
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Seleccionar producto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {products.map((product) => (
+                            <SelectItem key={product.id} value={product.id.toString()}>
+                              {product.name} ({product.sku})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={barcodeFlow.startScanning}
+                        className="shrink-0"
+                        title="Escanear código de barras"
+                      >
+                        <QrCode className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    
+                    {/* Estado del flujo de códigos de barras */}
+                    {barcodeFlow.barcode && (
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Package className="w-4 h-4" />
+                          <span className="text-muted-foreground">Código:</span>
+                          <span className="font-mono font-semibold">{barcodeFlow.barcode}</span>
+                          {barcodeFlow.state === "searching" && (
+                            <span className="text-muted-foreground">Buscando...</span>
+                          )}
+                          {barcodeFlow.product && (
+                            <span className="text-green-600">✓ {barcodeFlow.product.name}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -318,13 +385,48 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
             )}
             <Button 
               type="submit" 
-              disabled={entryMutation.isPending}
+              disabled={entryMutation.isPending || createCostCenterMutation.isPending}
             >
-              {entryMutation.isPending ? "Procesando..." : "Ingresar Producto"}
+              {entryMutation.isPending || createCostCenterMutation.isPending ? "Procesando..." : "Ingresar Producto"}
             </Button>
           </div>
         </form>
       </Form>
+
+      {/* Escáner de códigos de barras */}
+      <BarcodeScannerNative
+        isOpen={barcodeFlow.state === "scanning"}
+        onClose={barcodeFlow.handleCancel}
+        onScan={barcodeFlow.handleBarcodeScanned}
+        title="Escanear Código de Barras"
+        description="Apunta la cámara hacia el código de barras del producto"
+      />
+
+      {/* Modal para producto no encontrado */}
+      <ProductNotFoundModal
+        isOpen={barcodeFlow.state === "product-not-found"}
+        onClose={barcodeFlow.handleCancel}
+        barcode={barcodeFlow.barcode}
+        onCreateNew={barcodeFlow.handleCreateNew}
+        onAssociateExisting={barcodeFlow.handleAssociateExisting}
+      />
+
+      {/* Modal para asociar producto existente */}
+      <AssociateProductModal
+        isOpen={barcodeFlow.state === "associating-existing"}
+        onClose={barcodeFlow.handleCancel}
+        barcode={barcodeFlow.barcode}
+        onSuccess={barcodeFlow.handleProductAssociated}
+        products={products}
+      />
+
+      {/* Formulario para crear nuevo producto con código */}
+      <NewProductWithBarcodeForm
+        isOpen={barcodeFlow.state === "creating-new"}
+        onClose={barcodeFlow.handleCancel}
+        barcode={barcodeFlow.barcode}
+        onSuccess={barcodeFlow.handleProductCreated}
+      />
     </div>
   );
 }
