@@ -66,6 +66,11 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
 
   const selectedProduct = products.find(p => p.id === form.watch("productId"));
 
+  // Debug logging
+  console.log("📱 DEBUG: Renderizando ProductEntryForm");
+  console.log("📱 DEBUG: Products:", products.length);
+  console.log("📱 DEBUG: BarcodeFlow state:", barcodeFlow.state);
+
   // Mutación para el ingreso de producto
   const entryMutation = useMutation({
     mutationFn: async (data: ProductEntryData) => {
