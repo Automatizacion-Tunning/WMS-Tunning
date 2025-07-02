@@ -1,158 +1,159 @@
-# Inventory Management System
+# Sistema de Gestión de Inventarios
 
-## Overview
+## Descripción General
 
-This is a full-stack inventory management system built with a modern TypeScript stack. The application provides comprehensive warehouse and inventory management capabilities with a clean, modern user interface. It's designed as a single-page application (SPA) with a REST API backend and uses PostgreSQL as the primary database.
+Este es un sistema completo de gestión de inventarios construido con tecnologías modernas de TypeScript. La aplicación proporciona capacidades integrales de gestión de bodegas e inventarios con una interfaz de usuario limpia y moderna. Está diseñada como una aplicación de página única (SPA) con un backend de API REST y utiliza PostgreSQL como base de datos principal.
 
-## System Architecture
+## Arquitectura del Sistema
 
-The application follows a full-stack TypeScript architecture with clear separation between client and server code:
+La aplicación sigue una arquitectura completa de TypeScript con separación clara entre código cliente y servidor:
 
-### Frontend Architecture
-- **Framework**: React 18 with TypeScript
-- **Routing**: Wouter for client-side routing
-- **State Management**: TanStack Query (React Query) for server state
-- **UI Framework**: Radix UI components with Tailwind CSS styling
-- **Forms**: React Hook Form with Zod validation
-- **Build Tool**: Vite with custom configuration for development and production
+### Arquitectura Frontend
+- **Framework**: React 18 con TypeScript
+- **Enrutamiento**: Wouter para enrutamiento del lado del cliente
+- **Gestión de Estado**: TanStack Query (React Query) para estado del servidor
+- **Framework UI**: Componentes Radix UI con estilos Tailwind CSS
+- **Formularios**: React Hook Form con validación Zod
+- **Herramienta de Construcción**: Vite con configuración personalizada para desarrollo y producción
 
-### Backend Architecture  
-- **Runtime**: Node.js with Express.js server
-- **Database**: PostgreSQL with Drizzle ORM
-- **Connection**: Neon Database serverless driver
-- **API Design**: RESTful API with structured error handling
-- **Session Management**: Express sessions with PostgreSQL store
+### Arquitectura Backend  
+- **Runtime**: Servidor Node.js con Express.js
+- **Base de Datos**: PostgreSQL con Drizzle ORM
+- **Conexión**: Driver serverless de Neon Database
+- **Diseño de API**: API RESTful con manejo estructurado de errores
+- **Gestión de Sesiones**: Sesiones Express con almacén PostgreSQL
 
-### Database Architecture
-- **ORM**: Drizzle ORM with TypeScript-first schema definitions
-- **Migrations**: Drizzle Kit for schema management
-- **Connection**: Azure PostgreSQL with SSL encryption
+### Arquitectura de Base de Datos
+- **ORM**: Drizzle ORM con definiciones de esquema TypeScript-first
+- **Migraciones**: Drizzle Kit para gestión de esquemas
+- **Conexión**: Azure PostgreSQL con cifrado SSL
 - **Host**: tunning-innovaoper-erp.postgres.database.azure.com  
-- **User**: administrador_Innovaoper (usuario fijo y correcto)
-- **Database**: WMS_Compras
+- **Usuario**: administrador_Innovaoper (usuario fijo y correcto)
+- **Base de Datos**: WMS_Compras
 
-## Key Components
+## Componentes Principales
 
-### Core Entities
-1. **Users**: Authentication and role-based access control
-2. **Warehouses**: Hierarchical storage system organized by cost centers
-   - Main warehouse (PRINCIPAL)
-   - Sub-warehouses: UM2, PLATAFORMA, PEM, INTEGRADOR
-   - Cost center-based organization for better control
-3. **Products**: Inventory items with SKU tracking and CLP pricing
-4. **Inventory**: Stock levels per product per warehouse across all locations
-5. **Inventory Movements**: Audit trail for stock changes with warehouse tracking
+### Entidades Centrales
+1. **Usuarios**: Autenticación y control de acceso basado en roles
+2. **Bodegas**: Sistema jerárquico de almacenamiento organizado por centros de costo
+   - Bodega principal (PRINCIPAL)
+   - Sub-bodegas: UM2, PLATAFORMA, PEM, INTEGRADOR
+   - Organización basada en centros de costo para mejor control
+3. **Productos**: Artículos de inventario con seguimiento de SKU y precios en CLP
+4. **Inventario**: Niveles de stock por producto por bodega en todas las ubicaciones
+5. **Movimientos de Inventario**: Auditoría de cambios de stock con seguimiento de bodegas
 
-### Frontend Components
-- **Layout System**: Sidebar navigation with responsive design
-- **Dashboard**: Real-time metrics and low stock alerts
-- **Forms**: Reusable form components with validation
-- **Data Tables**: Paginated tables with sorting and filtering
-- **Modals**: Dialog-based workflows for CRUD operations
+### Componentes Frontend
+- **Sistema de Layout**: Navegación lateral con diseño responsivo
+- **Dashboard**: Métricas en tiempo real y alertas de stock bajo
+- **Formularios**: Componentes de formulario reutilizables con validación
+- **Tablas de Datos**: Tablas paginadas con ordenamiento y filtrado
+- **Modales**: Flujos de trabajo basados en diálogos para operaciones CRUD
 
-### Backend Services
-- **Storage Layer**: Abstracted data access with TypeScript interfaces
-- **Route Handlers**: RESTful endpoints for all entities
-- **Middleware**: Logging, error handling, and request processing
+### Servicios Backend
+- **Capa de Almacenamiento**: Acceso a datos abstraído con interfaces TypeScript
+- **Manejadores de Rutas**: Endpoints RESTful para todas las entidades
+- **Middleware**: Logging, manejo de errores y procesamiento de solicitudes
 
-## Data Flow
+## Flujo de Datos
 
-### Client-Server Communication
-1. React components use TanStack Query for data fetching
-2. API requests go through a centralized request handler
-3. Server responds with JSON data or appropriate error codes
-4. Client state is automatically synchronized with server state
+### Comunicación Cliente-Servidor
+1. Los componentes React usan TanStack Query para obtención de datos
+2. Las solicitudes API pasan por un manejador centralizado de solicitudes
+3. El servidor responde con datos JSON o códigos de error apropiados
+4. El estado del cliente se sincroniza automáticamente con el estado del servidor
 
-### Database Operations
-1. Drizzle ORM provides type-safe database queries
-2. Schema definitions are shared between client and server
-3. Migrations ensure consistent database structure
-4. Connection pooling handles concurrent requests efficiently
+### Operaciones de Base de Datos
+1. Drizzle ORM proporciona consultas de base de datos type-safe
+2. Las definiciones de esquema se comparten entre cliente y servidor
+3. Las migraciones aseguran estructura consistente de base de datos
+4. El pooling de conexiones maneja solicitudes concurrentes eficientemente
 
-### State Management
-1. Server state managed by TanStack Query with caching
-2. Form state handled by React Hook Form
-3. UI state managed by React hooks
-4. Global notifications via toast system
+### Gestión de Estado
+1. Estado del servidor gestionado por TanStack Query con caché
+2. Estado de formularios manejado por React Hook Form
+3. Estado de UI gestionado por hooks de React
+4. Notificaciones globales via sistema de toast
 
-## External Dependencies
+## Dependencias Externas
 
-### Core Dependencies
-- **@neondatabase/serverless**: PostgreSQL driver for serverless environments
-- **drizzle-orm**: Type-safe ORM with excellent TypeScript support
-- **@tanstack/react-query**: Powerful data synchronization for React
-- **@radix-ui/***: Accessible, unstyled UI components
-- **react-hook-form**: Performant forms with easy validation
+### Dependencias Principales
+- **@neondatabase/serverless**: Driver PostgreSQL para entornos serverless
+- **drizzle-orm**: ORM type-safe con excelente soporte TypeScript
+- **@tanstack/react-query**: Sincronización de datos potente para React
+- **@radix-ui/***: Componentes UI accesibles y sin estilos
+- **react-hook-form**: Formularios performantes con validación fácil
 
-### Development Tools
-- **Vite**: Fast development server and build tool
-- **TypeScript**: Static type checking across the entire stack
-- **Tailwind CSS**: Utility-first CSS framework
-- **ESBuild**: Fast JavaScript bundler for production
+### Herramientas de Desarrollo
+- **Vite**: Servidor de desarrollo rápido y herramienta de construcción
+- **TypeScript**: Verificación de tipos estática en todo el stack
+- **Tailwind CSS**: Framework CSS utility-first
+- **ESBuild**: Bundler JavaScript rápido para producción
 
-### UI and Styling
-- **Tailwind CSS**: Comprehensive utility classes with custom design system
-- **CSS Variables**: Theme customization with light/dark mode support
-- **Radix UI**: Accessible component primitives
-- **Lucide React**: Modern icon library
+### UI y Estilos
+- **Tailwind CSS**: Clases de utilidad comprehensivas con sistema de diseño personalizado
+- **Variables CSS**: Personalización de temas con soporte modo claro/oscuro
+- **Radix UI**: Primitivos de componentes accesibles
+- **Lucide React**: Librería de iconos moderna
 
-## Deployment Strategy
+## Estrategia de Despliegue
 
-### Development Environment
-- Vite development server with hot module replacement
-- TypeScript compilation with strict type checking
-- Environment variables for database connection
-- Replit-specific configurations for cloud development
+### Entorno de Desarrollo
+- Servidor de desarrollo Vite con reemplazo de módulos en caliente
+- Compilación TypeScript con verificación estricta de tipos
+- Variables de entorno para conexión de base de datos
+- Configuraciones específicas de Replit para desarrollo en la nube
 
-### Production Build
-1. **Frontend**: Vite builds optimized React bundle
-2. **Backend**: ESBuild compiles TypeScript server code
-3. **Database**: Drizzle migrations ensure schema consistency
-4. **Static Assets**: Served from Express with proper caching headers
+### Construcción de Producción
+1. **Frontend**: Vite construye bundle React optimizado
+2. **Backend**: ESBuild compila código TypeScript del servidor
+3. **Base de Datos**: Migraciones Drizzle aseguran consistencia de esquema
+4. **Assets Estáticos**: Servidos desde Express con headers de caché apropiados
 
-### Environment Configuration
-- Database URL configuration via environment variables
-- Separate development and production database instances
-- Build scripts handle both development and production workflows
+### Configuración de Entorno
+- Configuración URL de base de datos via variables de entorno
+- Instancias separadas de base de datos para desarrollo y producción
+- Scripts de construcción manejan flujos de trabajo de desarrollo y producción
 
-## Changelog
-
-```
-Changelog:
-- July 01, 2025. Initial setup
-- July 01, 2025. Implemented hierarchical warehouse structure with cost centers
-  * Added cost center fields to warehouse schema
-  * Created main warehouse with sub-warehouses (UM2, PLATAFORMA, PEM, INTEGRADOR)
-  * Updated warehouse management interface with hierarchy visualization
-  * Populated sample data with proper warehouse structure
-- July 02, 2025. Migrated to Azure PostgreSQL database
-  * Successfully connected to Azure PostgreSQL with SSL encryption
-  * Migrated all existing data (users, warehouses, products, inventory)
-  * Updated database configuration with Azure credentials
-  * Application now runs 100% on Azure infrastructure
-- July 02, 2025. Enhanced warehouse management interface
-  * Added comprehensive warehouse management screen with filtering
-  * Implemented clickable warehouse cards with detailed product views
-  * Added filters by cost center and warehouse with search functionality
-  * Created detailed modal views showing complete inventory per warehouse
-- July 02, 2025. Completed comprehensive barcode scanning system
-  * Implemented full barcode scanning in product entry forms (SimpleProductEntryForm)
-  * Added barcode flow with scan → find → select OR create/associate workflows
-  * Integrated native camera barcode scanning using ZXing library
-  * Added duplicate barcode validation across all product operations
-  * Completed API endpoints for barcode search and product association
-- July 02, 2025. Finalized complete REST API architecture
-  * All CRUD operations available via REST endpoints
-  * Barcode search endpoints: GET /api/products?barcode=XXX
-  * Dashboard metrics and inventory management via API
-  * Ready for external integrations and mobile app development
-  * Full Azure PostgreSQL integration with production-ready API
-```
-
-## User Preferences
+## Registro de Cambios
 
 ```
-Preferred communication style: Simple, everyday language.
-Currency: Chilean Peso (CLP) - Updated system to use CLP formatting and pricing.
-Database User: ALWAYS use "administrador_Innovaoper" as username for Azure PostgreSQL connections. Never use "tunning-innovaoper-erp" which was an error.
+Registro de Cambios:
+- 01 Julio, 2025. Configuración inicial
+- 01 Julio, 2025. Implementación de estructura jerárquica de bodegas con centros de costo
+  * Agregados campos de centro de costo al esquema de bodegas
+  * Creada bodega principal con sub-bodegas (UM2, PLATAFORMA, PEM, INTEGRADOR)
+  * Actualizada interfaz de gestión de bodegas con visualización jerárquica
+  * Poblados datos de ejemplo con estructura apropiada de bodegas
+- 02 Julio, 2025. Migración a base de datos Azure PostgreSQL
+  * Conectado exitosamente a Azure PostgreSQL con cifrado SSL
+  * Migrados todos los datos existentes (usuarios, bodegas, productos, inventario)
+  * Actualizada configuración de base de datos con credenciales Azure
+  * La aplicación ahora funciona 100% en infraestructura Azure
+- 02 Julio, 2025. Interfaz mejorada de gestión de bodegas
+  * Agregada pantalla integral de gestión de bodegas con filtrado
+  * Implementadas tarjetas clickeables de bodegas con vistas detalladas de productos
+  * Agregados filtros por centro de costo y bodega con funcionalidad de búsqueda
+  * Creadas vistas modales detalladas mostrando inventario completo por bodega
+- 02 Julio, 2025. Completado sistema integral de escaneo de códigos de barras
+  * Implementado escaneo completo de códigos de barras en formularios de ingreso de productos (SimpleProductEntryForm)
+  * Agregado flujo de códigos de barras con escanear → encontrar → seleccionar O crear/asociar
+  * Integrado escaneo nativo de códigos de barras con cámara usando librería ZXing
+  * Agregada validación de códigos de barras duplicados en todas las operaciones de productos
+  * Completados endpoints API para búsqueda de códigos de barras y asociación de productos
+- 02 Julio, 2025. Finalizada arquitectura completa de API REST
+  * Todas las operaciones CRUD disponibles vía endpoints REST
+  * Endpoints de búsqueda de códigos de barras: GET /api/products?barcode=XXX
+  * Métricas de dashboard y gestión de inventario vía API
+  * Listo para integraciones externas y desarrollo de aplicaciones móviles
+  * Integración completa Azure PostgreSQL con API lista para producción
+```
+
+## Preferencias del Usuario
+
+```
+Estilo de comunicación preferido: Lenguaje simple y cotidiano.
+Moneda: Peso Chileno (CLP) - Sistema actualizado para usar formato y precios CLP.
+Usuario de Base de Datos: SIEMPRE usar "administrador_Innovaoper" como nombre de usuario para conexiones Azure PostgreSQL. Nunca usar "tunning-innovaoper-erp" que fue un error.
+Idioma: Documentación y comunicación siempre en español.
 ```
