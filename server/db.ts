@@ -2,8 +2,8 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from "@shared/schema";
 
-// Azure PostgreSQL configuration - temporalmente deshabilitado por problemas de autenticación
-const useAzure = false; // process.env.AZURE_DB_HOST && process.env.AZURE_DB_USER && process.env.AZURE_DB_PASSWORD && process.env.AZURE_DB_NAME;
+// Azure PostgreSQL configuration
+const useAzure = process.env.AZURE_DB_HOST && process.env.AZURE_DB_USER && process.env.AZURE_DB_PASSWORD && process.env.AZURE_DB_NAME;
 
 let connectionConfig;
 
@@ -13,10 +13,9 @@ if (useAzure) {
     host: process.env.AZURE_DB_HOST,
     port: parseInt(process.env.AZURE_DB_PORT || '5432'),
     database: process.env.AZURE_DB_NAME,
-    user: process.env.AZURE_DB_USER,
+    user: 'administrador_Innovaoper', // Usuario correcto según VS Code
     password: process.env.AZURE_DB_PASSWORD,
     ssl: {
-      require: true,
       rejectUnauthorized: false
     },
     max: 10,

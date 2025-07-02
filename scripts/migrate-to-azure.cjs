@@ -11,7 +11,7 @@ const azureDB = new Pool({
   host: process.env.AZURE_DB_HOST,
   port: parseInt(process.env.AZURE_DB_PORT || '5432'),
   database: process.env.AZURE_DB_NAME,
-  user: process.env.AZURE_DB_USER,
+  user: 'administrador_Innovaoper', // Usuario correcto
   password: process.env.AZURE_DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 30000,
