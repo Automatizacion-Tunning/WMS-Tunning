@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Package, TrendingUp, AlertTriangle } from "lucide-react";
-import StockEntryForm from "@/components/forms/StockEntryForm";
+import { Plus, Package, TrendingUp, AlertTriangle, Building2 } from "lucide-react";
+import SimpleProductEntryForm from "@/components/forms/SimpleProductEntryForm";
 
 export default function StockEntry() {
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -12,9 +12,9 @@ export default function StockEntry() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Ingreso de Stock</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Ingreso de Productos</h1>
           <p className="text-muted-foreground">
-            Gestiona el ingreso inicial de productos a la bodega principal
+            Gestiona el ingreso de productos por centro de costo
           </p>
         </div>
         
@@ -22,14 +22,14 @@ export default function StockEntry() {
           <DialogTrigger asChild>
             <Button>
               <Plus className="w-4 h-4 mr-2" />
-              Ingresar Stock
+              Ingresar Producto
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Ingreso de Stock Inicial</DialogTitle>
+              <DialogTitle>Ingreso de Producto</DialogTitle>
             </DialogHeader>
-            <StockEntryForm onSuccess={() => setIsEntryModalOpen(false)} />
+            <SimpleProductEntryForm onSuccess={() => setIsEntryModalOpen(false)} />
           </DialogContent>
         </Dialog>
       </div>
@@ -38,14 +38,14 @@ export default function StockEntry() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Proceso de Ingreso
+              Centro de Costo
             </CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
+            <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">Automatizado</div>
+            <div className="text-2xl font-bold text-green-600">Requerido</div>
             <p className="text-xs text-muted-foreground">
-              Stock se ingresa automáticamente a bodega principal
+              Se asigna automáticamente a bodega principal del centro
             </p>
           </CardContent>
         </Card>
@@ -93,21 +93,22 @@ export default function StockEntry() {
             <div className="space-y-3">
               <h4 className="font-medium text-green-700">✓ Proceso Correcto</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>• Selecciona o crea un centro de costo</li>
                 <li>• Selecciona el producto desde el catálogo</li>
                 <li>• Especifica la cantidad a ingresar</li>
-                <li>• Agrega números de serie si es requerido</li>
-                <li>• El sistema asigna automáticamente la bodega principal</li>
                 <li>• Ingresa el precio específico para este movimiento</li>
+                <li>• Agrega números de serie si es requerido</li>
+                <li>• El sistema crea bodegas automáticamente si no existen</li>
               </ul>
             </div>
             
             <div className="space-y-3">
               <h4 className="font-medium text-red-700">✗ Puntos Importantes</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>• No se puede seleccionar bodega manualmente</li>
+                <li>• El centro de costo es obligatorio</li>
+                <li>• Se crean bodegas automáticamente si no existen</li>
                 <li>• Los números de serie deben ser únicos</li>
                 <li>• La cantidad debe ser mayor a 0</li>
-                <li>• Productos tangibles requieren gestión física</li>
                 <li>• El precio es obligatorio para cada ingreso</li>
               </ul>
             </div>
@@ -127,8 +128,8 @@ export default function StockEntry() {
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <h4 className="font-medium text-blue-800 mb-2">1. Ingreso Inicial</h4>
               <p className="text-sm text-blue-700">
-                Todo producto nuevo debe ingresar primero a la <strong>Bodega Principal</strong> del centro de costos correspondiente.
-                No es posible ingresar stock directamente a bodegas secundarias.
+                Todo producto debe ingresar especificando un <strong>Centro de Costo</strong>. 
+                El sistema asigna automáticamente la <strong>Bodega Principal</strong> del centro y crea las bodegas si no existen.
               </p>
             </div>
             

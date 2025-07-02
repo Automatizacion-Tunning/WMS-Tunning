@@ -319,6 +319,16 @@ export const warehouseEntrySchema = z.object({
   reason: z.string().optional(),
 });
 
+export const productEntrySchema = z.object({
+  productId: z.number().min(1, "Debe seleccionar un producto"),
+  costCenter: z.string().min(1, "Debe seleccionar un centro de costo"),
+  quantity: z.number().min(1, "La cantidad debe ser mayor a 0"),
+  price: z.number().min(0.01, "El precio es obligatorio y debe ser mayor a 0"),
+  serialNumbers: z.array(z.string()).optional(),
+  reason: z.string().optional(),
+  location: z.string().optional(),
+});
+
 export const costCenterFormSchema = z.object({
   costCenter: z.string().min(1, "El centro de costo es requerido"),
   location: z.string().optional(),

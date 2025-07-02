@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { 
   insertUserSchema, insertWarehouseSchema, insertProductSchema, 
   insertInventoryMovementSchema, insertTransferOrderSchema,
-  transferRequestSchema, stockEntrySchema, warehouseEntrySchema
+  transferRequestSchema, stockEntrySchema, warehouseEntrySchema, productEntrySchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -415,6 +415,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(order);
     } catch (error) {
       res.status(500).json({ message: "Failed to update transfer order status" });
+    }
+  });
+
+  // Product Entry routes (for entering products by cost center)
+  app.post("/api/product-entry", async (req, res) => {
+    try {
+      const validatedData = productEntrySchema.parse(req.body);
+      
+      // Get or create principal warehouse for the cost center
+      let principalWarehouse = await storage.getPrincipalWarehouse(validatedData.costCenter);
+      
+      if (!principalWarehouse) {
+        // Create the cost center and warehouses if they don't exist
+        await storage.createCostCenter(validatedData.costCenter, validatedData.location);
+        principalWarehouse = await storage.getPrincipalWarehouse(validatedData.costCenter);
+        
+        if (!principalWarehouse) {
+          return res.status(500).json({ message: "Failed to create principal warehouse" });
+        }
+      }
+      
+      // Get the product to check if it requires serial numbers
+      const product = await storage.getProduct(validatedData.productId);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+
+      // Validate serial numbers if required
+      if (product.requiresSerial && (!validatedData.serialNumbers || validatedData.serialNumbers.length !== validatedData.quantity)) {
+        return res.status(400).json({ 
+          message: `This product requires serial numbers. Please provide ${validatedData.quantity} serial numbers.` 
+        });
+      }
+
+      // Create inventory movement with the provided price
+      const movement = await storage.createInventoryMovement({
+        productId: validatedData.productId,
+        warehouseId: principalWarehouse.id,
+        movementType: 'in',
+        quantity: validatedData.quantity,
+        appliedPrice: validatedData.price.toString(),
+        reason: validatedData.reason || `Ingreso de producto al centro de costo ${validatedData.costCenter}`,
+        userId: 1, // TODO: Get from auth context
+      });
+
+      // Create serial numbers if required
+      if (product.requiresSerial && validatedData.serialNumbers) {
+        for (const serialNumber of validatedData.serialNumbers) {
+          await storage.createProductSerial({
+            productId: validatedData.productId,
+            warehouseId: principalWarehouse.id,
+            serialNumber,
+            movementId: movement.id,
+            status: 'active',
+          });
+        }
+      }
+
+      res.status(201).json(movement);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid product entry data", error });
     }
   });
 
