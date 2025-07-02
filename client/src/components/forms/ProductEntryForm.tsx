@@ -253,7 +253,13 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
                         </SelectContent>
                       </Select>
                       
-                      <Button type="button" variant="outline" size="icon" onClick={barcodeFlow.startScanning}>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="icon" 
+                        onClick={barcodeFlow.startScanning}
+                        title="Escanear código de barras"
+                      >
                         <QrCode className="w-4 h-4" />
                       </Button>
                     </div>
