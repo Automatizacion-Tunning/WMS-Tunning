@@ -350,14 +350,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/users/:id", async (req, res) => {
     try {
-      const validatedData = insertUserSchema.partial().parse(req.body);
+      console.log("📝 PUT /api/users/:id - Received data:", JSON.stringify(req.body, null, 2));
+      
+      // Convertir "sin_asignar" a null para el centro de costo
+      const bodyData = { ...req.body };
+      if (bodyData.costCenter === "sin_asignar") {
+        bodyData.costCenter = null;
+      }
+      
+      console.log("📝 Processed data:", JSON.stringify(bodyData, null, 2));
+      
+      const validatedData = insertUserSchema.partial().parse(bodyData);
+      console.log("✅ Validated data:", JSON.stringify(validatedData, null, 2));
+      
       const user = await storage.updateUser(parseInt(req.params.id), validatedData);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-      res.json(user);
+      res.json({ ...user, password: undefined }); // No enviar contraseñas
     } catch (error) {
-      res.status(400).json({ message: "Invalid user data", error });
+      console.error("❌ PUT /api/users/:id error:", error);
+      res.status(400).json({ message: "Invalid user data", error: error.message || error });
     }
   });
 
@@ -701,24 +714,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/users/:id", async (req, res) => {
-    try {
-      const validatedData = req.body; // TODO: Add validation
-      
-      // Convertir "sin_asignar" a null para el centro de costo
-      if (validatedData.costCenter === "sin_asignar") {
-        validatedData.costCenter = null;
-      }
-      
-      const user = await storage.updateUser(parseInt(req.params.id), validatedData);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      res.json({ ...user, password: undefined });
-    } catch (error) {
-      res.status(400).json({ message: "Invalid user data", error });
-    }
-  });
+
 
   app.delete("/api/users/:id", async (req, res) => {
     try {
