@@ -100,14 +100,16 @@ export default function ProductManagement() {
                   Nuevo Producto
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
+              <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+                <DialogHeader className="flex-shrink-0">
                   <DialogTitle>Crear Nuevo Producto</DialogTitle>
                   <DialogDescription>
                     Complete los detalles del nuevo producto. Todos los campos marcados con * son obligatorios.
                   </DialogDescription>
                 </DialogHeader>
-                <SimpleProductForm onSuccess={handleCreateProduct} />
+                <div className="flex-1 overflow-y-auto pr-2">
+                  <SimpleProductForm onSuccess={handleCreateProduct} />
+                </div>
               </DialogContent>
             </Dialog>
           </div>
@@ -193,20 +195,22 @@ export default function ProductManagement() {
 
       {/* Diálogo de Edición */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Editar Producto</DialogTitle>
             <DialogDescription>
               Modifique los detalles del producto. Todos los campos marcados con * son obligatorios.
             </DialogDescription>
           </DialogHeader>
-          {selectedProduct && (
-            <EditProductForm 
-              product={selectedProduct}
-              onSuccess={handleEditSuccess}
-              onCancel={() => setIsEditDialogOpen(false)}
-            />
-          )}
+          <div className="flex-1 overflow-y-auto pr-2">
+            {selectedProduct && (
+              <EditProductForm 
+                product={selectedProduct}
+                onSuccess={handleEditSuccess}
+                onCancel={() => setIsEditDialogOpen(false)}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
