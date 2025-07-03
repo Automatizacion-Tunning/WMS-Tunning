@@ -176,6 +176,13 @@ Registro de Cambios:
   * Política establecida: Si Azure falla, aplicación queda con error hasta solucionar problema
   * Verificado: Solo credenciales Azure activas, aplicación funcionando correctamente
   * NO usar fallbacks a Neon bajo ninguna circunstancia
+- 03 Julio, 2025. Solución completa de problemas de scroll en diálogos
+  * PROBLEMA IDENTIFICADO: Dos sistemas de productos con configuraciones diferentes de diálogos
+  * Ficha de Productos (ProductDetails.tsx) tenía diálogos con max-w-md sin scroll
+  * Sistema de Pestañas (ProductManagement.tsx) tenía configuración correcta
+  * SOLUCIÓN: Estandarizada configuración de TODOS los diálogos a max-w-2xl max-h-[90vh] overflow-y-auto
+  * Arreglados diálogos en: ProductDetails.tsx, CategoryManagement.tsx, BrandManagement.tsx, UnitManagement.tsx
+  * CONFIRMADO: Todos los diálogos del sistema ahora funcionan correctamente con scroll
 ```
 
 ## Preferencias del Usuario
