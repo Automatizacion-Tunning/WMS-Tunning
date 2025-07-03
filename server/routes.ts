@@ -615,6 +615,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/users", async (req, res) => {
     try {
       const validatedData = req.body; // TODO: Add validation with userFormSchema
+      
+      // Convertir "sin_asignar" a null para el centro de costo
+      if (validatedData.costCenter === "sin_asignar") {
+        validatedData.costCenter = null;
+      }
+      
       const user = await storage.createUser(validatedData);
       res.status(201).json({ ...user, password: undefined });
     } catch (error) {
@@ -625,6 +631,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/users/:id", async (req, res) => {
     try {
       const validatedData = req.body; // TODO: Add validation
+      
+      // Convertir "sin_asignar" a null para el centro de costo
+      if (validatedData.costCenter === "sin_asignar") {
+        validatedData.costCenter = null;
+      }
+      
       const user = await storage.updateUser(parseInt(req.params.id), validatedData);
       if (!user) {
         return res.status(404).json({ message: "User not found" });

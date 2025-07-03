@@ -42,7 +42,7 @@ export default function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
       lastName: user?.lastName || "",
       email: user?.email || "",
       role: user?.role || USER_ROLES.USER,
-      costCenter: user?.costCenter || "",
+      costCenter: user?.costCenter || "sin_asignar",
       isActive: user?.isActive !== false,
     },
   });
@@ -194,7 +194,7 @@ export default function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="">Sin asignar</SelectItem>
+                  <SelectItem value="sin_asignar">Sin asignar</SelectItem>
                   {costCenters.map((center) => (
                     <SelectItem key={center} value={center}>
                       {center}
