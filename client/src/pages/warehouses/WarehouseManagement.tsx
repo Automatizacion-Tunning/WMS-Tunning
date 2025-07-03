@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Package, MapPin, Search, Filter, Eye, X } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Package, MapPin, Search, Filter, Eye, X, ChevronDown, ChevronRight, Building2 } from "lucide-react";
 import { Warehouse, InventoryWithDetails } from "@shared/schema";
 
 interface WarehouseWithInventory extends Warehouse {
@@ -16,11 +17,18 @@ interface WarehouseWithInventory extends Warehouse {
   inventory: InventoryWithDetails[];
 }
 
+interface CostCenterGroup {
+  costCenter: string;
+  mainWarehouse: WarehouseWithInventory;
+  subWarehouses: WarehouseWithInventory[];
+}
+
 export default function WarehouseManagement() {
   const [selectedCostCenter, setSelectedCostCenter] = useState<string>("all");
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedWarehouseDetail, setSelectedWarehouseDetail] = useState<WarehouseWithInventory | null>(null);
+  const [expandedCostCenters, setExpandedCostCenters] = useState<Set<string>>(new Set());
 
   // Obtener todas las bodegas
   const { data: warehouses = [], isLoading: warehousesLoading } = useQuery<Warehouse[]>({
@@ -48,6 +56,43 @@ export default function WarehouseManagement() {
       inventory: warehouseInventory,
     };
   });
+
+  // Agrupar bodegas por centro de costo
+  const costCenterGroups: CostCenterGroup[] = [];
+  const processedCostCenters = new Set<string>();
+
+  warehousesWithInventory.forEach(warehouse => {
+    if (!processedCostCenters.has(warehouse.costCenter)) {
+      processedCostCenters.add(warehouse.costCenter);
+      
+      const mainWarehouse = warehousesWithInventory.find(w => 
+        w.costCenter === warehouse.costCenter && w.warehouseType === "main"
+      );
+      
+      const subWarehouses = warehousesWithInventory.filter(w => 
+        w.costCenter === warehouse.costCenter && w.warehouseType === "sub"
+      );
+
+      if (mainWarehouse) {
+        costCenterGroups.push({
+          costCenter: warehouse.costCenter,
+          mainWarehouse,
+          subWarehouses,
+        });
+      }
+    }
+  });
+
+  // Función para alternar expansión de centro de costo
+  const toggleCostCenter = (costCenter: string) => {
+    const newExpanded = new Set(expandedCostCenters);
+    if (newExpanded.has(costCenter)) {
+      newExpanded.delete(costCenter);
+    } else {
+      newExpanded.add(costCenter);
+    }
+    setExpandedCostCenters(newExpanded);
+  };
 
   // Obtener centros de costo únicos
   const costCenters = Array.from(new Set(warehouses.map(w => w.costCenter))).filter(Boolean);
@@ -168,95 +213,127 @@ export default function WarehouseManagement() {
         </CardContent>
       </Card>
 
-      {/* Lista de Bodegas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredWarehouses.map(warehouse => (
-          <Card 
-            key={warehouse.id} 
-            className="hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => setSelectedWarehouseDetail(warehouse)}
-          >
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  {warehouse.name}
-                </span>
-                <Badge variant={warehouse.warehouseType === "main" ? "default" : "secondary"}>
-                  {warehouse.warehouseType === "main" ? "PRINCIPAL" : warehouse.subWarehouseType?.toUpperCase() || "SUB"}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Información básica */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <MapPin className="h-4 w-4" />
-                  {warehouse.location || "Sin ubicación"}
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium">Centro de Costo:</span> {warehouse.costCenter}
-                </div>
-              </div>
-
-              {/* Métricas */}
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {warehouse.inventoryCount}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Productos
-                  </div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">
-                    ${warehouse.totalValue.toLocaleString('es-CL')}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Valor Total (CLP)
-                  </div>
-                </div>
-              </div>
-
-              {/* Lista de productos (los primeros 3) */}
-              {warehouse.inventory.length > 0 && (
-                <div className="pt-4 border-t">
-                  <div className="text-sm font-medium mb-2 flex items-center justify-between">
-                    Productos:
-                    <Eye className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="space-y-1">
-                    {warehouse.inventory.slice(0, 3).map(inv => (
-                      <div key={inv.id} className="flex justify-between text-xs">
-                        <span className="truncate flex-1 mr-2">
-                          {inv.product.name}
-                        </span>
-                        <span className="font-medium">
-                          {inv.quantity}
-                        </span>
+      {/* Vista Jerárquica por Centro de Costo */}
+      <div className="space-y-4">
+        {costCenterGroups.map(group => (
+          <Card key={group.costCenter}>
+            <Collapsible 
+              open={expandedCostCenters.has(group.costCenter)}
+              onOpenChange={() => toggleCostCenter(group.costCenter)}
+            >
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Building2 className="h-6 w-6 text-blue-600" />
+                      <div>
+                        <div className="text-lg font-semibold">
+                          Centro de Costo: {group.costCenter}
+                        </div>
+                        <div className="text-sm text-muted-foreground font-normal">
+                          {group.subWarehouses.length + 1} bodegas • 
+                          {" "}{group.mainWarehouse.inventoryCount + group.subWarehouses.reduce((sum, w) => sum + w.inventoryCount, 0)} productos únicos
+                        </div>
                       </div>
-                    ))}
-                    {warehouse.inventory.length > 3 && (
-                      <div className="text-xs text-blue-600 font-medium">
-                        Clic para ver {warehouse.inventory.length - 3} productos más
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">
+                        {group.subWarehouses.length + 1} bodegas
+                      </Badge>
+                      {expandedCostCenters.has(group.costCenter) ? (
+                        <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+              </CollapsibleTrigger>
+
+              <CollapsibleContent>
+                <CardContent className="pt-0">
+                  <div className="space-y-3">
+                    {/* Bodega Principal */}
+                    <Card 
+                      className="border-blue-200 bg-blue-50/50 hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => setSelectedWarehouseDetail(group.mainWarehouse)}
+                    >
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center justify-between text-base">
+                          <div className="flex items-center gap-2">
+                            <Package className="h-5 w-5 text-blue-600" />
+                            {group.mainWarehouse.name}
+                          </div>
+                          <Badge>PRINCIPAL</Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <MapPin className="h-4 w-4" />
+                          {group.mainWarehouse.location || "Sin ubicación"}
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="text-center">
+                            <div className="text-xl font-bold text-blue-600">
+                              {group.mainWarehouse.inventoryCount}
+                            </div>
+                            <div className="text-xs text-muted-foreground">Productos</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xl font-bold text-green-600">
+                              {group.mainWarehouse.inventory.reduce((sum, inv) => sum + inv.quantity, 0)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">Unidades</div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Sub-bodegas */}
+                    {group.subWarehouses.length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-4">
+                        {group.subWarehouses.map(subWarehouse => (
+                          <Card 
+                            key={subWarehouse.id}
+                            className="border-gray-200 hover:shadow-md transition-shadow cursor-pointer"
+                            onClick={() => setSelectedWarehouseDetail(subWarehouse)}
+                          >
+                            <CardHeader className="pb-2">
+                              <CardTitle className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-2">
+                                  <MapPin className="h-4 w-4 text-gray-500" />
+                                  {subWarehouse.name}
+                                </div>
+                                <Badge variant="secondary" className="text-xs">
+                                  {subWarehouse.subWarehouseType?.toUpperCase() || "SUB"}
+                                </Badge>
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-2">
+                              <div className="text-xs text-muted-foreground">
+                                {subWarehouse.location || "Sin ubicación"}
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span>{subWarehouse.inventoryCount} productos</span>
+                                <span className="font-medium">
+                                  {subWarehouse.inventory.reduce((sum, inv) => sum + inv.quantity, 0)} unidades
+                                </span>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
                       </div>
                     )}
                   </div>
-                </div>
-              )}
-
-              {warehouse.inventory.length === 0 && (
-                <div className="pt-4 border-t text-center text-muted-foreground text-sm">
-                  Sin productos en inventario
-                </div>
-              )}
-            </CardContent>
+                </CardContent>
+              </CollapsibleContent>
+            </Collapsible>
           </Card>
         ))}
       </div>
 
-      {filteredWarehouses.length === 0 && (
+      {costCenterGroups.length === 0 && (
         <Card>
           <CardContent className="py-8 text-center">
             <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
