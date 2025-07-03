@@ -28,7 +28,6 @@ const navigation = [
 const warehouseNavigation = [
   { name: "Centros de Costos", href: "/cost-centers", icon: Building2 },
   { name: "Administración", href: "/warehouses", icon: Settings },
-  { name: "Ficha", href: "/warehouses/details", icon: FileText },
 ];
 
 const productNavigation = [

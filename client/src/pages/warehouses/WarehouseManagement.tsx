@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Package, MapPin, Search, Filter, Eye, X } from "lucide-react";
@@ -281,6 +281,9 @@ export default function WarehouseManagement() {
                 {selectedWarehouseDetail?.warehouseType === "main" ? "PRINCIPAL" : selectedWarehouseDetail?.subWarehouseType?.toUpperCase() || "SUB"}
               </Badge>
             </DialogTitle>
+            <DialogDescription>
+              Información completa del inventario y productos de la bodega {selectedWarehouseDetail?.name}
+            </DialogDescription>
           </DialogHeader>
 
           {selectedWarehouseDetail && (
@@ -372,13 +375,13 @@ export default function WarehouseManagement() {
                               <span className="font-bold">{inv.quantity}</span>
                             </TableCell>
                             <TableCell className="text-center">
-                              {inv.product.minStock}
+                              {inv.product.minStock || "N/A"}
                             </TableCell>
                             <TableCell className="text-center">
                               <Badge 
-                                variant={inv.quantity <= inv.product.minStock ? "destructive" : "default"}
+                                variant={inv.quantity <= (inv.product.minStock ?? 0) ? "destructive" : "default"}
                               >
-                                {inv.quantity <= inv.product.minStock ? "Stock Bajo" : "Normal"}
+                                {inv.quantity <= (inv.product.minStock ?? 0) ? "Stock Bajo" : "Normal"}
                               </Badge>
                             </TableCell>
                           </TableRow>

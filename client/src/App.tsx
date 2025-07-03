@@ -42,7 +42,6 @@ function Router() {
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/warehouses" component={WarehouseManagement} />
-        <Route path="/warehouses/:id" component={WarehouseDetails} />
         <Route path="/cost-centers" component={CostCenterManagement} />
         <Route path="/products" component={ProductDetails} />
         <Route path="/products/management" component={ProductManagement} />
