@@ -16,7 +16,6 @@ import ProductMovements from "@/pages/products/ProductMovements";
 import ProductManagement from "@/pages/products/ProductManagement";
 import UserManagement from "@/pages/users/UserManagement";
 import StockEntry from "@/pages/inventory/StockEntry";
-import CompleteProductEntry from "@/pages/inventory/CompleteProductEntry";
 import TransferOrders from "@/pages/orders/TransferOrders";
 import TestBarcode from "@/pages/TestBarcode";
 
@@ -48,7 +47,6 @@ function Router() {
         <Route path="/products/management" component={ProductManagement} />
         <Route path="/products/movements" component={ProductMovements} />
         <Route path="/inventory/stock-entry" component={StockEntry} />
-        <Route path="/inventory/complete-entry" component={CompleteProductEntry} />
         <Route path="/orders/transfer-orders" component={TransferOrders} />
         <Route path="/users" component={UserManagement} />
         <Route path="/test-barcode" component={TestBarcode} />

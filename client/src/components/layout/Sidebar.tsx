@@ -38,7 +38,6 @@ const productNavigation = [
 
 const inventoryNavigation = [
   { name: "Ingreso de Productos", href: "/inventory/stock-entry", icon: ArrowUpCircle },
-  { name: "Ingreso Completo", href: "/inventory/complete-entry", icon: PlusCircle },
 ];
 
 const ordersNavigation = [
