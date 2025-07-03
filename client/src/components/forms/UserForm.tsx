@@ -72,13 +72,23 @@ export default function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
         delete payload.password;
       }
 
-      const endpoint = user ? `/api/users/${user.id}` : "/api/users";
-      const method = user ? "PUT" : "POST";
-
-      return apiRequest(endpoint, {
-        method,
-        body: payload,
-      });
+      if (user) {
+        return apiRequest(`/api/users/${user.id}`, {
+          method: "PUT",
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        return apiRequest("/api/users", {
+          method: "POST",
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
