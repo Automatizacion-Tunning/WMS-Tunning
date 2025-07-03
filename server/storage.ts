@@ -1,5 +1,6 @@
 import { 
   users, warehouses, products, inventory, inventoryMovements, productPrices, productSerials, transferOrders,
+  units, categories, brands,
   type User, type InsertUser,
   type Warehouse, type InsertWarehouse,
   type Product, type InsertProduct,
@@ -8,8 +9,11 @@ import {
   type ProductPrice, type InsertProductPrice,
   type ProductSerial, type InsertProductSerial,
   type TransferOrder, type InsertTransferOrder,
+  type Unit, type InsertUnit,
+  type Category, type InsertCategory,
+  type Brand, type InsertBrand,
   type InventoryWithDetails, type InventoryMovementWithDetails,
-  type ProductWithCurrentPrice, type TransferOrderWithDetails
+  type ProductWithCurrentPrice, type ProductWithDetails, type TransferOrderWithDetails
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
@@ -90,6 +94,30 @@ export interface IStorage {
   // Principal warehouse operations
   getPrincipalWarehouse(costCenter: string): Promise<Warehouse | undefined>;
   createPrincipalWarehouse(costCenter: string, location?: string): Promise<Warehouse>;
+
+  // Units operations
+  getUnit(id: number): Promise<Unit | undefined>;
+  getAllUnits(): Promise<Unit[]>;
+  createUnit(unit: InsertUnit): Promise<Unit>;
+  updateUnit(id: number, unit: Partial<InsertUnit>): Promise<Unit | undefined>;
+  deleteUnit(id: number): Promise<boolean>;
+
+  // Categories operations
+  getCategory(id: number): Promise<Category | undefined>;
+  getAllCategories(): Promise<Category[]>;
+  createCategory(category: InsertCategory): Promise<Category>;
+  updateCategory(id: number, category: Partial<InsertCategory>): Promise<Category | undefined>;
+  deleteCategory(id: number): Promise<boolean>;
+
+  // Brands operations
+  getBrand(id: number): Promise<Brand | undefined>;
+  getAllBrands(): Promise<Brand[]>;
+  createBrand(brand: InsertBrand): Promise<Brand>;
+  updateBrand(id: number, brand: Partial<InsertBrand>): Promise<Brand | undefined>;
+  deleteBrand(id: number): Promise<boolean>;
+
+  // Enhanced product operations
+  getAllProductsWithDetails(): Promise<ProductWithDetails[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -236,11 +264,15 @@ export class DatabaseStorage implements IStorage {
       sku: products.sku,
       barcode: products.barcode,
       description: products.description,
-      category: products.category,
-      minStock: products.minStock,
-      maxStock: products.maxStock,
       productType: products.productType,
       requiresSerial: products.requiresSerial,
+      unitId: products.unitId,
+      categoryId: products.categoryId,
+      brandId: products.brandId,
+      hasWarranty: products.hasWarranty,
+      warrantyMonths: products.warrantyMonths,
+      minStock: products.minStock,
+      maxStock: products.maxStock,
       isActive: products.isActive,
       createdAt: products.createdAt,
       updatedAt: products.updatedAt,
@@ -266,11 +298,15 @@ export class DatabaseStorage implements IStorage {
       sku: row.sku,
       barcode: row.barcode,
       description: row.description,
-      category: row.category,
-      minStock: row.minStock,
-      maxStock: row.maxStock,
       productType: row.productType,
       requiresSerial: row.requiresSerial,
+      unitId: row.unitId,
+      categoryId: row.categoryId,
+      brandId: row.brandId,
+      hasWarranty: row.hasWarranty,
+      warrantyMonths: row.warrantyMonths,
+      minStock: row.minStock,
+      maxStock: row.maxStock,
       isActive: row.isActive,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -747,6 +783,174 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return newWarehouse;
+  }
+
+  // Units operations
+  async getUnit(id: number): Promise<Unit | undefined> {
+    const [unit] = await db.select().from(units).where(eq(units.id, id));
+    return unit || undefined;
+  }
+
+  async getAllUnits(): Promise<Unit[]> {
+    return await db.select().from(units).where(eq(units.isActive, true)).orderBy(asc(units.name));
+  }
+
+  async createUnit(insertUnit: InsertUnit): Promise<Unit> {
+    const [unit] = await db.insert(units).values(insertUnit).returning();
+    return unit;
+  }
+
+  async updateUnit(id: number, updateData: Partial<InsertUnit>): Promise<Unit | undefined> {
+    const [unit] = await db.update(units)
+      .set(updateData)
+      .where(eq(units.id, id))
+      .returning();
+    return unit || undefined;
+  }
+
+  async deleteUnit(id: number): Promise<boolean> {
+    const result = await db.update(units)
+      .set({ isActive: false })
+      .where(eq(units.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Categories operations
+  async getCategory(id: number): Promise<Category | undefined> {
+    const [category] = await db.select().from(categories).where(eq(categories.id, id));
+    return category || undefined;
+  }
+
+  async getAllCategories(): Promise<Category[]> {
+    return await db.select().from(categories).where(eq(categories.isActive, true)).orderBy(asc(categories.name));
+  }
+
+  async createCategory(insertCategory: InsertCategory): Promise<Category> {
+    const [category] = await db.insert(categories).values(insertCategory).returning();
+    return category;
+  }
+
+  async updateCategory(id: number, updateData: Partial<InsertCategory>): Promise<Category | undefined> {
+    const [category] = await db.update(categories)
+      .set(updateData)
+      .where(eq(categories.id, id))
+      .returning();
+    return category || undefined;
+  }
+
+  async deleteCategory(id: number): Promise<boolean> {
+    const result = await db.update(categories)
+      .set({ isActive: false })
+      .where(eq(categories.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Brands operations
+  async getBrand(id: number): Promise<Brand | undefined> {
+    const [brand] = await db.select().from(brands).where(eq(brands.id, id));
+    return brand || undefined;
+  }
+
+  async getAllBrands(): Promise<Brand[]> {
+    return await db.select().from(brands).where(eq(brands.isActive, true)).orderBy(asc(brands.name));
+  }
+
+  async createBrand(insertBrand: InsertBrand): Promise<Brand> {
+    const [brand] = await db.insert(brands).values(insertBrand).returning();
+    return brand;
+  }
+
+  async updateBrand(id: number, updateData: Partial<InsertBrand>): Promise<Brand | undefined> {
+    const [brand] = await db.update(brands)
+      .set(updateData)
+      .where(eq(brands.id, id))
+      .returning();
+    return brand || undefined;
+  }
+
+  async deleteBrand(id: number): Promise<boolean> {
+    const result = await db.update(brands)
+      .set({ isActive: false })
+      .where(eq(brands.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Enhanced product operations
+  async getAllProductsWithDetails(): Promise<ProductWithDetails[]> {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+
+    const result = await db.select({
+      id: products.id,
+      name: products.name,
+      sku: products.sku,
+      barcode: products.barcode,
+      description: products.description,
+      productType: products.productType,
+      requiresSerial: products.requiresSerial,
+      unitId: products.unitId,
+      categoryId: products.categoryId,
+      brandId: products.brandId,
+      hasWarranty: products.hasWarranty,
+      warrantyMonths: products.warrantyMonths,
+      minStock: products.minStock,
+      maxStock: products.maxStock,
+      isActive: products.isActive,
+      createdAt: products.createdAt,
+      updatedAt: products.updatedAt,
+      unit: units,
+      category: categories,
+      brand: brands,
+      priceId: productPrices.id,
+      priceProductId: productPrices.productId,
+      priceYear: productPrices.year,
+      priceMonth: productPrices.month,
+      price: productPrices.price,
+      priceCreatedAt: productPrices.createdAt,
+    })
+    .from(products)
+    .innerJoin(units, eq(products.unitId, units.id))
+    .innerJoin(categories, eq(products.categoryId, categories.id))
+    .innerJoin(brands, eq(products.brandId, brands.id))
+    .leftJoin(productPrices, and(
+      eq(products.id, productPrices.productId),
+      eq(productPrices.year, currentYear),
+      eq(productPrices.month, currentMonth)
+    ))
+    .where(eq(products.isActive, true))
+    .orderBy(asc(products.name));
+
+    return result.map(row => ({
+      id: row.id,
+      name: row.name,
+      sku: row.sku,
+      barcode: row.barcode,
+      description: row.description,
+      productType: row.productType,
+      requiresSerial: row.requiresSerial,
+      unitId: row.unitId,
+      categoryId: row.categoryId,
+      brandId: row.brandId,
+      hasWarranty: row.hasWarranty,
+      warrantyMonths: row.warrantyMonths,
+      minStock: row.minStock,
+      maxStock: row.maxStock,
+      isActive: row.isActive,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      unit: row.unit,
+      category: row.category,
+      brand: row.brand,
+      currentPrice: row.priceId ? {
+        id: row.priceId,
+        productId: row.priceProductId!,
+        year: row.priceYear!,
+        month: row.priceMonth!,
+        price: row.price!,
+        createdAt: row.priceCreatedAt!,
+      } : undefined,
+    }));
   }
 }
 

@@ -3,9 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Package, Clock, Settings } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Package, Tags, Award, Ruler, Clock, Settings } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import SimpleProductForm from "@/components/forms/SimpleProductForm";
+import CategoryManagement from "./CategoryManagement";
+import BrandManagement from "./BrandManagement";
+import UnitManagement from "./UnitManagement";
 import { type ProductWithCurrentPrice } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
@@ -16,8 +20,6 @@ export default function ProductManagement() {
   const { data: products = [], isLoading } = useQuery<ProductWithCurrentPrice[]>({
     queryKey: ["/api/products"],
   });
-
-
 
   const formatPrice = (price: string | undefined) => {
     if (!price) return "Sin precio";
@@ -40,135 +42,138 @@ export default function ProductManagement() {
     setIsCreateDialogOpen(false);
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Gestión de Productos</h1>
-            <p className="text-muted-foreground">Administre el catálogo de productos y precios mensuales</p>
-          </div>
-        </div>
-        <div className="grid gap-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 bg-muted/50 rounded-lg animate-pulse" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Gestión de Productos</h1>
           <p className="text-muted-foreground">
-            Administre el catálogo de productos con precios mensuales y números de serie
+            Sistema completo de administración de productos, categorías, marcas y unidades
           </p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Nuevo Producto
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Crear Nuevo Producto</DialogTitle>
-              <DialogDescription>
-                Complete la información del producto y establezca el precio inicial
-              </DialogDescription>
-            </DialogHeader>
-            <SimpleProductForm 
-              onSuccess={handleCreateProduct}
-              onCancel={() => setIsCreateDialogOpen(false)}
-            />
-          </DialogContent>
-        </Dialog>
       </div>
 
-      <div className="grid gap-6">
-        {products.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <Package className="w-16 h-16 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No hay productos</h3>
-              <p className="text-muted-foreground text-center mb-4">
-                Comience creando su primer producto en el sistema
+      <Tabs defaultValue="products" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="products" className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            Productos
+          </TabsTrigger>
+          <TabsTrigger value="categories" className="flex items-center gap-2">
+            <Tags className="h-4 w-4" />
+            Categorías
+          </TabsTrigger>
+          <TabsTrigger value="brands" className="flex items-center gap-2">
+            <Award className="h-4 w-4" />
+            Marcas
+          </TabsTrigger>
+          <TabsTrigger value="units" className="flex items-center gap-2">
+            <Ruler className="h-4 w-4" />
+            Unidades
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="products" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-bold">Lista de Productos</h2>
+              <p className="text-muted-foreground">
+                Administre el catálogo de productos y precios mensuales
               </p>
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Crear Primer Producto
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4">
-            {products.map((product) => (
-              <Card key={product.id} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start">
+            </div>
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nuevo Producto
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Crear Nuevo Producto</DialogTitle>
+                  <DialogDescription>
+                    Complete los detalles del nuevo producto. Todos los campos marcados con * son obligatorios.
+                  </DialogDescription>
+                </DialogHeader>
+                <SimpleProductForm onSuccess={handleCreateProduct} />
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {isLoading ? (
+            <div className="grid gap-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-24 bg-muted animate-pulse rounded-lg"></div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {products.map((product) => (
+                <Card key={product.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <div className="space-y-1">
-                      <CardTitle className="text-lg">{product.name}</CardTitle>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">
-                          {product.sku}
-                        </Badge>
-                        <Badge variant={getProductTypeBadge(product.productType)}>
-                          {getProductTypeLabel(product.productType)}
-                        </Badge>
-                        {product.requiresSerial && (
-                          <Badge variant="secondary">
-                            Requiere Serial
-                          </Badge>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Package className="h-5 w-5" />
+                        {product.name}
+                      </CardTitle>
+                      <CardDescription className="flex items-center gap-4">
+                        <span className="flex items-center gap-1">
+                          <strong>SKU:</strong> {product.sku || "Sin SKU"}
+                        </span>
+                        {product.barcode && (
+                          <span className="flex items-center gap-1">
+                            <strong>Código:</strong> {product.barcode}
+                          </span>
                         )}
-                      </div>
+                      </CardDescription>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
-                        <Clock className="w-4 h-4 mr-2" />
-                        Historial
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Settings className="w-4 h-4 mr-2" />
-                        Editar
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">Descripción</p>
-                      <p className="text-sm">{product.description || "Sin descripción"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">Precio Actual</p>
-                      <p className="text-lg font-semibold text-green-600">
-                        {formatPrice(product.currentPrice?.price)}
-                      </p>
-                      {product.currentPrice && (
-                        <p className="text-xs text-muted-foreground">
-                          {new Date().toLocaleDateString('es-CL', { 
-                            year: 'numeric', 
-                            month: 'long' 
-                          })}
-                        </p>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={getProductTypeBadge(product.productType || "tangible") as any}>
+                        {getProductTypeLabel(product.productType || "tangible")}
+                      </Badge>
+                      {product.requiresSerial && (
+                        <Badge variant="outline">Requiere N° Serie</Badge>
                       )}
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">Stock Mínimo</p>
-                      <p className="text-sm">{product.minStock} unidades</p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">
+                          {product.description || "Sin descripción"}
+                        </p>
+                        <div className="flex items-center gap-4 text-sm">
+                          <span className="flex items-center gap-1">
+                            <strong>Precio Actual:</strong> {formatPrice(product.currentPrice?.price)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <strong>Stock Min/Max:</strong> {product.minStock || 0}/{product.maxStock || 0}
+                          </span>
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm">
+                        Ver Detalles
+                      </Button>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="categories">
+          <CategoryManagement />
+        </TabsContent>
+
+        <TabsContent value="brands">
+          <BrandManagement />
+        </TabsContent>
+
+        <TabsContent value="units">
+          <UnitManagement />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

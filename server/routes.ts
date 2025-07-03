@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { 
   insertUserSchema, insertWarehouseSchema, insertProductSchema, 
   insertInventoryMovementSchema, insertTransferOrderSchema,
+  insertUnitSchema, insertCategorySchema, insertBrandSchema,
   transferRequestSchema, stockEntrySchema, warehouseEntrySchema, productEntrySchema
 } from "@shared/schema";
 
@@ -782,6 +783,187 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ hasPermission });
     } catch (error) {
       res.status(500).json({ message: "Failed to check permission" });
+    }
+  });
+
+  // Units routes
+  app.get("/api/units", async (req, res) => {
+    try {
+      const units = await storage.getAllUnits();
+      res.json(units);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch units" });
+    }
+  });
+
+  app.get("/api/units/:id", async (req, res) => {
+    try {
+      const unit = await storage.getUnit(parseInt(req.params.id));
+      if (!unit) {
+        return res.status(404).json({ message: "Unit not found" });
+      }
+      res.json(unit);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch unit" });
+    }
+  });
+
+  app.post("/api/units", async (req, res) => {
+    try {
+      const validatedData = insertUnitSchema.parse(req.body);
+      const unit = await storage.createUnit(validatedData);
+      res.status(201).json(unit);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid unit data", error });
+    }
+  });
+
+  app.put("/api/units/:id", async (req, res) => {
+    try {
+      const validatedData = insertUnitSchema.partial().parse(req.body);
+      const unit = await storage.updateUnit(parseInt(req.params.id), validatedData);
+      if (!unit) {
+        return res.status(404).json({ message: "Unit not found" });
+      }
+      res.json(unit);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid unit data", error });
+    }
+  });
+
+  app.delete("/api/units/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteUnit(parseInt(req.params.id));
+      if (!success) {
+        return res.status(404).json({ message: "Unit not found" });
+      }
+      res.json({ message: "Unit deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete unit" });
+    }
+  });
+
+  // Categories routes
+  app.get("/api/categories", async (req, res) => {
+    try {
+      const categories = await storage.getAllCategories();
+      res.json(categories);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch categories" });
+    }
+  });
+
+  app.get("/api/categories/:id", async (req, res) => {
+    try {
+      const category = await storage.getCategory(parseInt(req.params.id));
+      if (!category) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+      res.json(category);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch category" });
+    }
+  });
+
+  app.post("/api/categories", async (req, res) => {
+    try {
+      const validatedData = insertCategorySchema.parse(req.body);
+      const category = await storage.createCategory(validatedData);
+      res.status(201).json(category);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid category data", error });
+    }
+  });
+
+  app.put("/api/categories/:id", async (req, res) => {
+    try {
+      const validatedData = insertCategorySchema.partial().parse(req.body);
+      const category = await storage.updateCategory(parseInt(req.params.id), validatedData);
+      if (!category) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+      res.json(category);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid category data", error });
+    }
+  });
+
+  app.delete("/api/categories/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteCategory(parseInt(req.params.id));
+      if (!success) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+      res.json({ message: "Category deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete category" });
+    }
+  });
+
+  // Brands routes
+  app.get("/api/brands", async (req, res) => {
+    try {
+      const brands = await storage.getAllBrands();
+      res.json(brands);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch brands" });
+    }
+  });
+
+  app.get("/api/brands/:id", async (req, res) => {
+    try {
+      const brand = await storage.getBrand(parseInt(req.params.id));
+      if (!brand) {
+        return res.status(404).json({ message: "Brand not found" });
+      }
+      res.json(brand);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch brand" });
+    }
+  });
+
+  app.post("/api/brands", async (req, res) => {
+    try {
+      const validatedData = insertBrandSchema.parse(req.body);
+      const brand = await storage.createBrand(validatedData);
+      res.status(201).json(brand);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid brand data", error });
+    }
+  });
+
+  app.put("/api/brands/:id", async (req, res) => {
+    try {
+      const validatedData = insertBrandSchema.partial().parse(req.body);
+      const brand = await storage.updateBrand(parseInt(req.params.id), validatedData);
+      if (!brand) {
+        return res.status(404).json({ message: "Brand not found" });
+      }
+      res.json(brand);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid brand data", error });
+    }
+  });
+
+  app.delete("/api/brands/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteBrand(parseInt(req.params.id));
+      if (!success) {
+        return res.status(404).json({ message: "Brand not found" });
+      }
+      res.json({ message: "Brand deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete brand" });
+    }
+  });
+
+  // Enhanced products route with full details
+  app.get("/api/products/with-details", async (req, res) => {
+    try {
+      const products = await storage.getAllProductsWithDetails();
+      res.json(products);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch products with details" });
     }
   });
 

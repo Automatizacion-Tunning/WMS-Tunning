@@ -31,17 +31,49 @@ export const warehouses = pgTable("warehouses", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Tabla para unidades de medida
+export const units = pgTable("units", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 50 }).notNull().unique(), // ej: "unidad", "kilogramo", "metro"
+  abbreviation: varchar("abbreviation", { length: 10 }).notNull().unique(), // ej: "un", "kg", "m"
+  type: varchar("type", { length: 20 }).notNull(), // ej: "count", "weight", "length"
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Tabla para categorías de productos
+export const categories = pgTable("categories", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Tabla para marcas de productos
+export const brands = pgTable("brands", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 200 }).notNull(),
   sku: varchar("sku", { length: 50 }),
   barcode: varchar("barcode", { length: 100 }),
   description: text("description"),
-  category: varchar("category", { length: 100 }),
+  productType: varchar("product_type", { length: 20 }).default("tangible"), // 'tangible' or 'intangible'
+  requiresSerial: boolean("requires_serial").default(false),
+  unitId: integer("unit_id").notNull(),
+  categoryId: integer("category_id").notNull(),
+  brandId: integer("brand_id").notNull(),
+  hasWarranty: boolean("has_warranty").notNull().default(false),
+  warrantyMonths: integer("warranty_months"), // Meses de garantía (solo si hasWarranty es true)
   minStock: integer("min_stock").default(0),
   maxStock: integer("max_stock").default(1000),
-  productType: varchar("product_type", { length: 20 }).default("tangible"),
-  requiresSerial: boolean("requires_serial").default(false),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -130,7 +162,31 @@ export const warehousesRelations = relations(warehouses, ({ one, many }) => ({
   }),
 }));
 
-export const productsRelations = relations(products, ({ many }) => ({
+export const unitsRelations = relations(units, ({ many }) => ({
+  products: many(products),
+}));
+
+export const categoriesRelations = relations(categories, ({ many }) => ({
+  products: many(products),
+}));
+
+export const brandsRelations = relations(brands, ({ many }) => ({
+  products: many(products),
+}));
+
+export const productsRelations = relations(products, ({ one, many }) => ({
+  unit: one(units, {
+    fields: [products.unitId],
+    references: [units.id],
+  }),
+  category: one(categories, {
+    fields: [products.categoryId],
+    references: [categories.id],
+  }),
+  brand: one(brands, {
+    fields: [products.brandId],
+    references: [brands.id],
+  }),
   inventory: many(inventory),
   inventoryMovements: many(inventoryMovements),
   productPrices: many(productPrices),
@@ -260,6 +316,21 @@ export const insertTransferOrderSchema = createInsertSchema(transferOrders).omit
   updatedAt: true,
 });
 
+export const insertUnitSchema = createInsertSchema(units).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCategorySchema = createInsertSchema(categories).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertBrandSchema = createInsertSchema(brands).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -297,8 +368,25 @@ export type InsertProductSerial = z.infer<typeof insertProductSerialSchema>;
 export type TransferOrder = typeof transferOrders.$inferSelect;
 export type InsertTransferOrder = z.infer<typeof insertTransferOrderSchema>;
 
+export type Unit = typeof units.$inferSelect;
+export type InsertUnit = z.infer<typeof insertUnitSchema>;
+
+export type Category = typeof categories.$inferSelect;
+export type InsertCategory = z.infer<typeof insertCategorySchema>;
+
+export type Brand = typeof brands.$inferSelect;
+export type InsertBrand = z.infer<typeof insertBrandSchema>;
+
 // Tipo extendido para productos con precio actual
 export type ProductWithCurrentPrice = Product & {
+  currentPrice?: ProductPrice;
+};
+
+// Tipo extendido para productos con relaciones completas
+export type ProductWithDetails = Product & {
+  unit: Unit;
+  category: Category;
+  brand: Brand;
   currentPrice?: ProductPrice;
 };
 
