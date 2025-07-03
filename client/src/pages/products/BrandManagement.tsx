@@ -182,7 +182,7 @@ export default function BrandManagement() {
               Nueva Marca
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Crear Nueva Marca</DialogTitle>
             </DialogHeader>
@@ -306,7 +306,7 @@ export default function BrandManagement() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Marca</DialogTitle>
           </DialogHeader>

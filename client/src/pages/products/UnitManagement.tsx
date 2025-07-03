@@ -202,7 +202,7 @@ export default function UnitManagement() {
               Nueva Unidad
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Crear Nueva Unidad de Medida</DialogTitle>
             </DialogHeader>
@@ -351,7 +351,7 @@ export default function UnitManagement() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Unidad de Medida</DialogTitle>
           </DialogHeader>
