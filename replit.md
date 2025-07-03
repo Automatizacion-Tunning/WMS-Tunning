@@ -191,6 +191,12 @@ Registro de Cambios:
   * AGREGADOS: Categorías, marcas, unidades, garantía, precios y tipo de producto al formulario
   * CONFIGURADO: Validación completa de campos requeridos y opcionales
   * CONFIRMADO: Sistema simplificado con un solo flujo de creación de productos
+- 03 Julio, 2025. Mejora completa del formulario de ingreso de productos con información detallada
+  * AGREGADA sección de información del producto seleccionado en formulario de ingreso
+  * INCLUIDOS todos los detalles: categoría, marca, unidad, tipo, garantía, precio actual
+  * INTEGRADOS badges visuales para estado activo y requiere serial
+  * ACTUALIZADA consulta para obtener productos con detalles completos (ProductWithDetails)
+  * MEJORADA experiencia visual con tarjeta azul destacada para información del producto
 ```
 
 ## Preferencias del Usuario

@@ -9,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { productEntrySchema, type Product } from "@shared/schema";
+import { productEntrySchema, type Product, type ProductWithDetails } from "@shared/schema";
 import { z } from "zod";
-import { Plus, X, Package, Building2, Scan } from "lucide-react";
+import { Plus, X, Package, Building2, Scan, Info } from "lucide-react";
 import { useBarcodeFlow } from "@/hooks/useBarcodeFlow";
 import BarcodeScanner from "@/components/ui/barcode-scanner-native";
 import ProductNotFoundModal from "@/components/modals/ProductNotFoundModal";
@@ -31,8 +31,8 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
   const [serialNumbers, setSerialNumbers] = useState<string[]>([]);
   const [serialInput, setSerialInput] = useState("");
 
-  const { data: products = [] } = useQuery<Product[]>({
-    queryKey: ["/api/products"],
+  const { data: products = [] } = useQuery<ProductWithDetails[]>({
+    queryKey: ["/api/products/with-details"],
   });
 
   // Centros de costo predefinidos
@@ -227,6 +227,78 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
               </FormItem>
             )}
           />
+
+          {/* Información del producto seleccionado */}
+          {selectedProduct && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2 mb-3">
+                <Info className="w-4 h-4 text-blue-600" />
+                <h3 className="font-semibold text-blue-900">Información del Producto</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                <div>
+                  <span className="font-medium text-gray-600">Categoría:</span>
+                  <p className="text-gray-900">{selectedProduct.category?.name || 'Sin categoría'}</p>
+                </div>
+                
+                <div>
+                  <span className="font-medium text-gray-600">Marca:</span>
+                  <p className="text-gray-900">{selectedProduct.brand?.name || 'Sin marca'}</p>
+                </div>
+                
+                <div>
+                  <span className="font-medium text-gray-600">Unidad:</span>
+                  <p className="text-gray-900">
+                    {selectedProduct.unit?.name || 'Sin unidad'} 
+                    {selectedProduct.unit?.abbreviation && ` (${selectedProduct.unit.abbreviation})`}
+                  </p>
+                </div>
+                
+                <div>
+                  <span className="font-medium text-gray-600">Tipo:</span>
+                  <p className="text-gray-900 capitalize">{selectedProduct.productType}</p>
+                </div>
+                
+                <div>
+                  <span className="font-medium text-gray-600">Requiere Serie:</span>
+                  <Badge variant={selectedProduct.requiresSerial ? "default" : "secondary"}>
+                    {selectedProduct.requiresSerial ? "Sí" : "No"}
+                  </Badge>
+                </div>
+                
+                <div>
+                  <span className="font-medium text-gray-600">Estado:</span>
+                  <Badge variant={selectedProduct.isActive ? "default" : "destructive"}>
+                    {selectedProduct.isActive ? "Activo" : "Inactivo"}
+                  </Badge>
+                </div>
+                
+                {selectedProduct.hasWarranty && (
+                  <div>
+                    <span className="font-medium text-gray-600">Garantía:</span>
+                    <p className="text-gray-900">{selectedProduct.warrantyMonths} meses</p>
+                  </div>
+                )}
+                
+                {selectedProduct.currentPrice && (
+                  <div>
+                    <span className="font-medium text-gray-600">Precio Actual:</span>
+                    <p className="text-gray-900 font-semibold">
+                      ${selectedProduct.currentPrice.toLocaleString('es-CL')} CLP
+                    </p>
+                  </div>
+                )}
+              </div>
+              
+              {selectedProduct.description && (
+                <div>
+                  <span className="font-medium text-gray-600">Descripción:</span>
+                  <p className="text-gray-900 text-sm mt-1">{selectedProduct.description}</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Cantidad */}
           <FormField
