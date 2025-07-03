@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { useAuth } from "@/hooks/useAuth";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: ChartPie },
@@ -51,12 +52,17 @@ const userNavigation = [
 // Contenido del sidebar (compartido entre desktop y móvil)
 function SidebarContent() {
   const [location] = useLocation();
+  const { user, logout } = useAuth();
 
   const isActive = (href: string) => {
     if (href === "/") {
       return location === "/";
     }
     return location.startsWith(href);
+  };
+
+  const handleLogout = async () => {
+    await logout();
   };
 
   return (
@@ -207,10 +213,20 @@ function SidebarContent() {
             <User className="w-4 h-4 text-muted-foreground" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-sidebar-foreground">Admin Usuario</p>
-            <p className="text-xs text-muted-foreground">Administrador</p>
+            <p className="text-sm font-medium text-sidebar-foreground">
+              {user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || 'Usuario'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {user?.role === 'admin' ? 'Administrador' : 
+               user?.role === 'project_manager' ? 'Jefe de Proyecto' :
+               user?.role === 'warehouse_operator' ? 'Operador' : 'Usuario'}
+            </p>
           </div>
-          <button className="text-muted-foreground hover:text-sidebar-foreground">
+          <button 
+            onClick={handleLogout}
+            className="text-muted-foreground hover:text-sidebar-foreground transition-colors"
+            title="Cerrar sesión"
+          >
             <LogOut className="w-4 h-4" />
           </button>
         </div>
