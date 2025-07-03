@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -8,8 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Package, MapPin, Search, Filter, Eye, X, ChevronDown, ChevronRight, Building2 } from "lucide-react";
-import { Warehouse, InventoryWithDetails } from "@shared/schema";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
+import { Package, MapPin, Search, Filter, Eye, X, ChevronDown, ChevronRight, Building2, Edit } from "lucide-react";
+import { Warehouse, InventoryWithDetails, insertWarehouseSchema, type InsertWarehouse } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
 
 interface WarehouseWithInventory extends Warehouse {
   inventoryCount: number;
@@ -29,6 +34,7 @@ export default function WarehouseManagement() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedWarehouseDetail, setSelectedWarehouseDetail] = useState<WarehouseWithInventory | null>(null);
   const [expandedCostCenters, setExpandedCostCenters] = useState<Set<string>>(new Set());
+  const [editingWarehouse, setEditingWarehouse] = useState<WarehouseWithInventory | null>(null);
 
   // Obtener todas las bodegas
   const { data: warehouses = [], isLoading: warehousesLoading } = useQuery<Warehouse[]>({
@@ -255,7 +261,7 @@ export default function WarehouseManagement() {
                   <div className="space-y-3">
                     {/* Bodega Principal */}
                     <Card 
-                      className="border-blue-200 bg-blue-50/50 hover:shadow-md transition-shadow cursor-pointer"
+                      className="border-blue-200 bg-blue-50/50 hover:shadow-md transition-shadow cursor-pointer relative"
                       onClick={() => setSelectedWarehouseDetail(group.mainWarehouse)}
                     >
                       <CardHeader className="pb-3">
@@ -264,7 +270,20 @@ export default function WarehouseManagement() {
                             <Package className="h-5 w-5 text-blue-600" />
                             {group.mainWarehouse.name}
                           </div>
-                          <Badge>PRINCIPAL</Badge>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingWarehouse(group.mainWarehouse);
+                              }}
+                              className="h-8 w-8 p-0 hover:bg-blue-100"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Badge>PRINCIPAL</Badge>
+                          </div>
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
@@ -305,9 +324,22 @@ export default function WarehouseManagement() {
                                   <MapPin className="h-4 w-4 text-gray-500" />
                                   {subWarehouse.name}
                                 </div>
-                                <Badge variant="secondary" className="text-xs">
-                                  {subWarehouse.subWarehouseType?.toUpperCase() || "SUB"}
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingWarehouse(subWarehouse);
+                                    }}
+                                    className="h-6 w-6 p-0 hover:bg-gray-100"
+                                  >
+                                    <Edit className="h-3 w-3" />
+                                  </Button>
+                                  <Badge variant="secondary" className="text-xs">
+                                    {subWarehouse.subWarehouseType?.toUpperCase() || "SUB"}
+                                  </Badge>
+                                </div>
                               </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-2">
@@ -472,6 +504,193 @@ export default function WarehouseManagement() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Edición de Bodega */}
+      <EditWarehouseDialog
+        warehouse={editingWarehouse}
+        onClose={() => setEditingWarehouse(null)}
+      />
     </div>
+  );
+}
+
+// Componente de edición de bodega
+function EditWarehouseDialog({ 
+  warehouse, 
+  onClose 
+}: { 
+  warehouse: WarehouseWithInventory | null;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const form = useForm<InsertWarehouse>({
+    resolver: zodResolver(insertWarehouseSchema),
+    defaultValues: {
+      name: "",
+      costCenter: "",
+      location: "",
+      warehouseType: "main",
+      subWarehouseType: null,
+    },
+  });
+
+  // Reiniciar formulario cuando cambie la bodega
+  useEffect(() => {
+    if (warehouse) {
+      form.reset({
+        name: warehouse.name,
+        costCenter: warehouse.costCenter,
+        location: warehouse.location || "",
+        warehouseType: warehouse.warehouseType,
+        subWarehouseType: warehouse.subWarehouseType || null,
+      });
+    }
+  }, [warehouse, form]);
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: InsertWarehouse) => {
+      if (!warehouse) return;
+      return apiRequest(`/api/warehouses/${warehouse.id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouses"] });
+      toast({
+        title: "Éxito",
+        description: "Bodega actualizada correctamente",
+      });
+      onClose();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la bodega",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = (data: InsertWarehouse) => {
+    updateMutation.mutate(data);
+  };
+
+  return (
+    <Dialog open={!!warehouse} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Editar Bodega</DialogTitle>
+          <DialogDescription>
+            Modifica la información de la bodega {warehouse?.name}
+          </DialogDescription>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nombre de la Bodega</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Nombre de la bodega" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="costCenter"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Centro de Costo</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Centro de costo" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="location"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Ubicación</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ubicación física" {...field} value={field.value || ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="warehouseType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tipo de Bodega</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona tipo de bodega" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="main">Principal</SelectItem>
+                      <SelectItem value="sub">Sub-bodega</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {form.watch("warehouseType") === "sub" && (
+              <FormField
+                control={form.control}
+                name="subWarehouseType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo de Sub-bodega</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona tipo de sub-bodega" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="um2">UM2</SelectItem>
+                        <SelectItem value="plataforma">PLATAFORMA</SelectItem>
+                        <SelectItem value="pem">PEM</SelectItem>
+                        <SelectItem value="integrador">INTEGRADOR</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "Guardando..." : "Guardar Cambios"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }
