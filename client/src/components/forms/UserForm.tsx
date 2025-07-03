@@ -7,9 +7,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
-import { userFormSchema, USER_ROLES, type User, type Warehouse } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { type User, type Warehouse } from "@shared/schema";
 import { z } from "zod";
+
+const userFormSchema = z.object({
+  username: z.string().min(1, "El nombre de usuario es requerido"),
+  firstName: z.string().min(1, "El nombre es requerido"),
+  lastName: z.string().min(1, "El apellido es requerido"),
+  email: z.string().email("Email inválido").optional().or(z.literal("")),
+  role: z.enum(["user", "admin", "project_manager", "warehouse_operator"]),
+  costCenter: z.string().optional(),
+  isActive: z.boolean(),
+  password: z.string().optional(),
+});
 
 type UserFormData = z.infer<typeof userFormSchema>;
 
@@ -35,42 +46,52 @@ export default function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
     }, []);
 
   const form = useForm<UserFormData>({
-    resolver: zodResolver(userFormSchema.omit({ password: user ? true : false })),
+    resolver: zodResolver(
+      user 
+        ? userFormSchema.extend({ password: z.string().optional() })
+        : userFormSchema.extend({ password: z.string().min(1, "La contraseña es requerida") })
+    ),
     defaultValues: {
       username: user?.username || "",
       firstName: user?.firstName || "",
       lastName: user?.lastName || "",
       email: user?.email || "",
-      role: user?.role || USER_ROLES.USER,
+      role: (user?.role as any) || "user",
       costCenter: user?.costCenter || "sin_asignar",
       isActive: user?.isActive !== false,
+      password: "",
     },
   });
 
   const mutation = useMutation({
     mutationFn: async (data: UserFormData) => {
-      const url = user ? `/api/users/${user.id}` : "/api/users";
-      const method = user ? "PUT" : "POST";
+      const payload = { ...data };
       
-      return await apiRequest(url, {
+      // Si estamos editando y no hay contraseña, la omitimos
+      if (user && !data.password) {
+        delete payload.password;
+      }
+
+      const endpoint = user ? `/api/users/${user.id}` : "/api/users";
+      const method = user ? "PUT" : "POST";
+
+      return apiRequest(endpoint, {
         method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: payload,
       });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({
-        title: user ? "Usuario actualizado" : "Usuario creado",
-        description: user ? 
-          "El usuario ha sido actualizado correctamente." : 
-          "El usuario ha sido creado correctamente.",
+        title: "Éxito",
+        description: user ? "Usuario actualizado correctamente" : "Usuario creado correctamente",
       });
       onSuccess?.();
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "No se pudo guardar el usuario.",
+        description: error.message || "Ocurrió un error al procesar el usuario",
         variant: "destructive",
       });
     },
@@ -82,16 +103,50 @@ export default function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="username"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nombre de Usuario</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Ingrese el nombre de usuario" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  {user ? "Nueva Contraseña (opcional)" : "Contraseña"}
+                </FormLabel>
+                <FormControl>
+                  <Input 
+                    {...field} 
+                    type="password" 
+                    placeholder={user ? "Dejar vacío para mantener actual" : "Ingrese la contraseña"} 
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
           <FormField
             control={form.control}
             name="firstName"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Nombre *</FormLabel>
+                <FormLabel>Nombre</FormLabel>
                 <FormControl>
-                  <Input placeholder="Nombre" {...field} />
+                  <Input {...field} placeholder="Ingrese el nombre" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -103,142 +158,107 @@ export default function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
             name="lastName"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Apellido *</FormLabel>
+                <FormLabel>Apellido</FormLabel>
                 <FormControl>
-                  <Input placeholder="Apellido" {...field} />
+                  <Input {...field} placeholder="Ingrese el apellido" />
                 </FormControl>
                 <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input {...field} type="email" placeholder="Ingrese el email" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="role"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Rol</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccione un rol" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="user">Usuario</SelectItem>
+                    <SelectItem value="warehouse_operator">Operador de Bodega</SelectItem>
+                    <SelectItem value="project_manager">Jefe de Proyecto</SelectItem>
+                    <SelectItem value="admin">Administrador</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="costCenter"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Centro de Costo</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccione un centro de costo" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="sin_asignar">Sin asignar</SelectItem>
+                    {costCenters.map((center) => (
+                      <SelectItem key={center} value={center}>
+                        {center}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="isActive"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Estado Activo</FormLabel>
+                  <div className="text-sm text-muted-foreground">
+                    El usuario puede acceder al sistema
+                  </div>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
               </FormItem>
             )}
           />
         </div>
 
-        <FormField
-          control={form.control}
-          name="username"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Nombre de Usuario *</FormLabel>
-              <FormControl>
-                <Input placeholder="Nombre de usuario único" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {!user && (
-          <FormField
-            control={form.control}
-            name="password"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Contraseña *</FormLabel>
-                <FormControl>
-                  <Input type="password" placeholder="Mínimo 6 caracteres" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
-
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input type="email" placeholder="email@empresa.com" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="role"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Rol *</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar rol" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value={USER_ROLES.USER}>Usuario</SelectItem>
-                  <SelectItem value={USER_ROLES.WAREHOUSE_OPERATOR}>Operador</SelectItem>
-                  <SelectItem value={USER_ROLES.PROJECT_MANAGER}>Jefe de Proyecto</SelectItem>
-                  <SelectItem value={USER_ROLES.ADMIN}>Administrador</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="costCenter"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Centro de Costo</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar centro de costo" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="sin_asignar">Sin asignar</SelectItem>
-                  {costCenters.map((center) => (
-                    <SelectItem key={center} value={center}>
-                      {center}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="isActive"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-              <div className="space-y-0.5">
-                <FormLabel className="text-base">Usuario Activo</FormLabel>
-                <div className="text-sm text-muted-foreground">
-                  Permitir que el usuario acceda al sistema
-                </div>
-              </div>
-              <FormControl>
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              </FormControl>
-            </FormItem>
-          )}
-        />
-
-        <div className="flex justify-end gap-3 pt-4">
-          {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel}>
-              Cancelar
-            </Button>
-          )}
-          <Button 
-            type="submit" 
-            disabled={mutation.isPending}
-          >
-            {mutation.isPending ? "Guardando..." : user ? "Actualizar" : "Crear Usuario"}
+        <div className="flex justify-end space-x-2">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={mutation.isPending}>
+            {mutation.isPending ? "Guardando..." : user ? "Actualizar" : "Crear"}
           </Button>
         </div>
       </form>
