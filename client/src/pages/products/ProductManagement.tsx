@@ -100,16 +100,14 @@ export default function ProductManagement() {
                   Nuevo Producto
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+              <DialogContent className="max-w-2xl max-h-[70vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Crear Nuevo Producto</DialogTitle>
                   <DialogDescription>
                     Complete los detalles del nuevo producto. Todos los campos marcados con * son obligatorios.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="max-h-[calc(80vh-120px)] overflow-y-auto">
-                  <SimpleProductForm onSuccess={handleCreateProduct} />
-                </div>
+                <SimpleProductForm onSuccess={handleCreateProduct} />
               </DialogContent>
             </Dialog>
           </div>
@@ -195,22 +193,20 @@ export default function ProductManagement() {
 
       {/* Diálogo de Edición */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[70vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Producto</DialogTitle>
             <DialogDescription>
               Modifique los detalles del producto. Todos los campos marcados con * son obligatorios.
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[calc(80vh-120px)] overflow-y-auto">
-            {selectedProduct && (
-              <EditProductForm 
-                product={selectedProduct}
-                onSuccess={handleEditSuccess}
-                onCancel={() => setIsEditDialogOpen(false)}
-              />
-            )}
-          </div>
+          {selectedProduct && (
+            <EditProductForm 
+              product={selectedProduct}
+              onSuccess={handleEditSuccess}
+              onCancel={() => setIsEditDialogOpen(false)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
