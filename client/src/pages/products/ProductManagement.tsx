@@ -100,14 +100,14 @@ export default function ProductManagement() {
                   Nuevo Producto
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
-                <DialogHeader className="flex-shrink-0">
+              <DialogContent className="max-w-4xl h-[85vh] flex flex-col">
+                <DialogHeader className="flex-shrink-0 pb-4">
                   <DialogTitle>Crear Nuevo Producto</DialogTitle>
                   <DialogDescription>
                     Complete los detalles del nuevo producto. Todos los campos marcados con * son obligatorios.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="flex-1 overflow-y-auto pr-2">
+                <div className="flex-1 overflow-y-auto px-1" style={{ minHeight: 0 }}>
                   <SimpleProductForm onSuccess={handleCreateProduct} />
                 </div>
               </DialogContent>
@@ -195,14 +195,14 @@ export default function ProductManagement() {
 
       {/* Diálogo de Edición */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
-          <DialogHeader className="flex-shrink-0">
+        <DialogContent className="max-w-4xl h-[85vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0 pb-4">
             <DialogTitle>Editar Producto</DialogTitle>
             <DialogDescription>
               Modifique los detalles del producto. Todos los campos marcados con * son obligatorios.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto pr-2">
+          <div className="flex-1 overflow-y-auto px-1" style={{ minHeight: 0 }}>
             {selectedProduct && (
               <EditProductForm 
                 product={selectedProduct}
