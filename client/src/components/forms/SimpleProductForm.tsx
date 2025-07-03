@@ -123,7 +123,7 @@ export default function SimpleProductForm({ onSuccess, onCancel }: SimpleProduct
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pb-8">
         {/* Nombre del Producto */}
         <FormField
           control={form.control}
