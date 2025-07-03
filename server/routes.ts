@@ -158,7 +158,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/products", async (req, res) => {
     try {
-      const validatedData = insertProductSchema.parse(req.body);
+      console.log("📦 POST /api/products - Request body:", req.body);
+      
+      // Separar currentPrice del resto de datos
+      const { currentPrice, ...productData } = req.body;
+      const validatedData = insertProductSchema.parse(productData);
       
       // Verificar si el código de barras ya existe (si se proporciona)
       if (validatedData.barcode && validatedData.barcode.trim() !== "") {
@@ -175,10 +179,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      const product = await storage.createProduct(validatedData);
+      // Crear producto con precio inicial
+      const product = await storage.createProduct(validatedData, currentPrice || 0);
+      console.log("✅ Producto creado:", product.name);
       res.status(201).json(product);
     } catch (error) {
-      res.status(400).json({ message: "Invalid product data", error });
+      console.error("❌ Error creando producto:", error);
+      res.status(400).json({ message: "Invalid product data", error: error instanceof Error ? error.message : String(error) });
     }
   });
 

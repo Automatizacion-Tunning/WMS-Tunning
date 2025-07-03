@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,10 +9,24 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { insertProductSchema } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
+import { type Unit, type Category, type Brand } from "@shared/schema";
 import { z } from "zod";
 
-const productFormSchema = insertProductSchema.extend({
+// Esquema personalizado para el formulario
+const productFormSchema = z.object({
+  name: z.string().min(1, "El nombre es requerido"),
+  sku: z.string().optional(),
+  barcode: z.string().optional(),
+  description: z.string().optional(),
+  productType: z.enum(["tangible", "intangible"]).default("tangible"),
+  requiresSerial: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+  maxStock: z.number().min(0).default(0),
+  unitId: z.number().min(1, "Debe seleccionar una unidad"),
+  categoryId: z.number().min(1, "Debe seleccionar una categoría"),
+  brandId: z.number().min(1, "Debe seleccionar una marca"),
+  warrantyMonths: z.number().min(0, "La garantía debe ser mayor o igual a 0").default(0),
   currentPrice: z.number().min(0, "El precio debe ser mayor a 0"),
 });
 
@@ -26,76 +40,104 @@ interface SimpleProductFormProps {
 export default function SimpleProductForm({ onSuccess, onCancel }: SimpleProductFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Obtener opciones para los selectores
+  const { data: units = [] } = useQuery<Unit[]>({
+    queryKey: ["/api/units"],
+  });
+
+  const { data: categories = [] } = useQuery<Category[]>({
+    queryKey: ["/api/categories"],
+  });
+
+  const { data: brands = [] } = useQuery<Brand[]>({
+    queryKey: ["/api/brands"],
+  });
 
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
     defaultValues: {
       name: "",
       sku: "",
+      barcode: "",
       description: "",
-      minStock: 10,
       productType: "tangible",
       requiresSerial: false,
       isActive: true,
+      maxStock: 0,
+      unitId: 0,
+      categoryId: 0,
+      brandId: 0,
+      warrantyMonths: 0,
       currentPrice: 0,
     },
   });
 
-  const createProductMutation = useMutation({
-    mutationFn: async (data: ProductFormData) => {
+  const onSubmit = async (data: ProductFormData) => {
+    try {
+      setIsSubmitting(true);
+      
+      // Separar precio del resto de datos
       const { currentPrice, ...productData } = data;
       
-      const response = await fetch("/api/products", {
+      // Crear el producto
+      const response = await apiRequest("/api/products", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...productData, currentPrice }),
+        body: JSON.stringify({
+          ...productData,
+          currentPrice: currentPrice || 0,
+        }),
       });
-      
-      if (!response.ok) {
+
+      if (response.ok) {
+        toast({
+          title: "Producto creado",
+          description: "El producto ha sido creado exitosamente",
+        });
+        
+        // Invalidar cache
+        queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+        
+        // Resetear formulario
+        form.reset();
+        
+        // Callback de éxito
+        onSuccess?.();
+      } else {
         throw new Error("Error al crear el producto");
       }
-      
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      toast({
-        title: "Producto creado",
-        description: "El producto se ha creado exitosamente.",
-      });
-      form.reset();
-      onSuccess?.();
-    },
-    onError: (error) => {
+    } catch (error) {
+      console.error("Error:", error);
       toast({
         title: "Error",
-        description: "No se pudo crear el producto. Intenta nuevamente.",
+        description: "No se pudo crear el producto. Intente nuevamente.",
         variant: "destructive",
       });
-    },
-  });
-
-  const onSubmit = async (data: ProductFormData) => {
-    createProductMutation.mutate(data);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* Nombre del Producto */}
         <FormField
           control={form.control}
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Nombre del Producto</FormLabel>
+              <FormLabel>Nombre del Producto *</FormLabel>
               <FormControl>
-                <Input placeholder="Ej: Laptop Dell XPS" {...field} />
+                <Input {...field} placeholder="Ingrese el nombre del producto" />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
+        {/* SKU */}
         <FormField
           control={form.control}
           name="sku"
@@ -103,13 +145,29 @@ export default function SimpleProductForm({ onSuccess, onCancel }: SimpleProduct
             <FormItem>
               <FormLabel>SKU</FormLabel>
               <FormControl>
-                <Input placeholder="Ej: LAPTOP-001" {...field} />
+                <Input {...field} value={field.value || ""} placeholder="Código SKU del producto" />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
+        {/* Código de Barras */}
+        <FormField
+          control={form.control}
+          name="barcode"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Código de Barras</FormLabel>
+              <FormControl>
+                <Input {...field} value={field.value || ""} placeholder="Ej: 1234567890123" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Descripción */}
         <FormField
           control={form.control}
           name="description"
@@ -117,31 +175,107 @@ export default function SimpleProductForm({ onSuccess, onCancel }: SimpleProduct
             <FormItem>
               <FormLabel>Descripción</FormLabel>
               <FormControl>
-                <Textarea 
-                  placeholder="Descripción detallada del producto..." 
-                  {...field}
-                  value={field.value || ""}
-                />
+                <Textarea {...field} value={field.value || ""} placeholder="Descripción del producto" />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
+        {/* Categoría */}
+        <FormField
+          control={form.control}
+          name="categoryId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Categoría *</FormLabel>
+              <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione una categoría" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id.toString()}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Marca */}
+        <FormField
+          control={form.control}
+          name="brandId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Marca *</FormLabel>
+              <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione una marca" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {brands.map((brand) => (
+                    <SelectItem key={brand.id} value={brand.id.toString()}>
+                      {brand.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Unidad de Medida */}
+        <FormField
+          control={form.control}
+          name="unitId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Unidad de Medida *</FormLabel>
+              <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione una unidad" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {units.map((unit) => (
+                    <SelectItem key={unit.id} value={unit.id.toString()}>
+                      {unit.name} ({unit.abbreviation})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Precio Actual */}
         <FormField
           control={form.control}
           name="currentPrice"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Precio Actual (CLP)</FormLabel>
+              <FormLabel>Precio Actual (CLP) *</FormLabel>
               <FormControl>
                 <Input 
                   type="number" 
-                  step="100"
-                  placeholder="500000" 
-                  {...field}
-                  value={field.value || ""}
-                  onChange={(e) => field.onChange(Number(e.target.value))}
+                  {...field} 
+                  value={field.value || 0}
+                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                  placeholder="0" 
+                  min="0"
+                  step="0.01"
                 />
               </FormControl>
               <FormMessage />
@@ -149,19 +283,21 @@ export default function SimpleProductForm({ onSuccess, onCancel }: SimpleProduct
           )}
         />
 
+        {/* Garantía */}
         <FormField
           control={form.control}
-          name="minStock"
+          name="warrantyMonths"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Stock Mínimo</FormLabel>
+              <FormLabel>Garantía (meses)</FormLabel>
               <FormControl>
                 <Input 
                   type="number" 
-                  placeholder="10" 
-                  {...field}
-                  value={field.value || ""}
-                  onChange={(e) => field.onChange(Number(e.target.value))}
+                  {...field} 
+                  value={field.value || 0}
+                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                  placeholder="0" 
+                  min="0"
                 />
               </FormControl>
               <FormMessage />
@@ -169,16 +305,39 @@ export default function SimpleProductForm({ onSuccess, onCancel }: SimpleProduct
           )}
         />
 
+        {/* Stock Máximo */}
+        <FormField
+          control={form.control}
+          name="maxStock"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Stock Máximo</FormLabel>
+              <FormControl>
+                <Input 
+                  type="number" 
+                  {...field} 
+                  value={field.value || 0}
+                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                  placeholder="0" 
+                  min="0"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Tipo de Producto */}
         <FormField
           control={form.control}
           name="productType"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Tipo de Producto</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecciona el tipo" />
+                    <SelectValue placeholder="Seleccione el tipo" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -191,61 +350,63 @@ export default function SimpleProductForm({ onSuccess, onCancel }: SimpleProduct
           )}
         />
 
+        {/* Requiere Número de Serie */}
         <FormField
           control={form.control}
           name="requiresSerial"
           render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-              <div className="space-y-0.5">
-                <FormLabel className="text-base">
-                  Requiere Número de Serie
-                </FormLabel>
-                <div className="text-sm text-muted-foreground">
-                  Activar si el producto necesita números de serie únicos
-                </div>
-              </div>
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
               <FormControl>
                 <Switch
                   checked={field.value}
                   onCheckedChange={field.onChange}
                 />
               </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>
+                  Requiere Número de Serie
+                </FormLabel>
+                <p className="text-sm text-muted-foreground">
+                  Activar si el producto necesita números de serie únicos
+                </p>
+              </div>
             </FormItem>
           )}
         />
 
+        {/* Producto Activo */}
         <FormField
           control={form.control}
           name="isActive"
           render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-              <div className="space-y-0.5">
-                <FormLabel className="text-base">
-                  Producto Activo
-                </FormLabel>
-                <div className="text-sm text-muted-foreground">
-                  Desactivar para ocultar el producto del sistema
-                </div>
-              </div>
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
               <FormControl>
                 <Switch
                   checked={field.value}
                   onCheckedChange={field.onChange}
                 />
               </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>
+                  Producto Activo
+                </FormLabel>
+                <p className="text-sm text-muted-foreground">
+                  Desactivar para ocultar el producto del sistema
+                </p>
+              </div>
             </FormItem>
           )}
         />
 
-        <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Cancelar
-          </Button>
-          <Button 
-            type="submit" 
-            disabled={createProductMutation.isPending}
-          >
-            {createProductMutation.isPending ? "Creando..." : "Crear Producto"}
+        {/* Botones */}
+        <div className="flex justify-end space-x-2">
+          {onCancel && (
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancelar
+            </Button>
+          )}
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Creando..." : "Crear Producto"}
           </Button>
         </div>
       </form>
