@@ -197,6 +197,12 @@ Registro de Cambios:
   * INTEGRADOS badges visuales para estado activo y requiere serial
   * ACTUALIZADA consulta para obtener productos con detalles completos (ProductWithDetails)
   * MEJORADA experiencia visual con tarjeta azul destacada para información del producto
+- 03 Julio, 2025. Eliminación completa de página "Ficha de Productos" y limpieza del sistema
+  * ELIMINADO archivo ProductDetails.tsx y toda la lógica asociada
+  * ACTUALIZADA navegación para eliminar referencia a "Ficha" del menú de productos
+  * REDIRIGIDA ruta /products a ProductManagement (sistema de pestañas)
+  * SIMPLIFICADO sistema de navegación: ahora solo "Gestión" y "Alta/Baja" en productos
+  * CONFIRMADO: Sistema limpio sin código basura o páginas duplicadas
 ```
 
 ## Preferencias del Usuario

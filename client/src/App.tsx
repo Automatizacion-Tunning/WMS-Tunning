@@ -11,7 +11,6 @@ import Dashboard from "@/pages/Dashboard";
 import WarehouseManagement from "@/pages/warehouses/WarehouseManagement";
 import WarehouseDetails from "@/pages/warehouses/WarehouseDetails";
 import CostCenterManagement from "@/pages/warehouses/CostCenterManagement";
-import ProductDetails from "@/pages/products/ProductDetails";
 import ProductMovements from "@/pages/products/ProductMovements";
 import ProductManagement from "@/pages/products/ProductManagement";
 import UserManagement from "@/pages/users/UserManagement";
@@ -43,7 +42,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/warehouses" component={WarehouseManagement} />
         <Route path="/cost-centers" component={CostCenterManagement} />
-        <Route path="/products" component={ProductDetails} />
+        <Route path="/products" component={ProductManagement} />
         <Route path="/products/management" component={ProductManagement} />
         <Route path="/products/movements" component={ProductMovements} />
         <Route path="/inventory/stock-entry" component={StockEntry} />

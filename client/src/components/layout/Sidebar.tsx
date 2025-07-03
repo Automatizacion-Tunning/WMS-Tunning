@@ -31,8 +31,7 @@ const warehouseNavigation = [
 ];
 
 const productNavigation = [
-  { name: "Gestión", href: "/products/management", icon: Package },
-  { name: "Ficha", href: "/products", icon: ClipboardList },
+  { name: "Gestión", href: "/products", icon: Package },
   { name: "Alta/Baja", href: "/products/movements", icon: PlusCircle },
 ];
 
