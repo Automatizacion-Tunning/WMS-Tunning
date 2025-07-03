@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
 
@@ -22,21 +21,6 @@ export function useAuth() {
     }
     setIsLoading(false);
   }, []);
-
-  // Verificar la sesión con el servidor
-  const { data: sessionUser, isLoading: sessionLoading } = useQuery({
-    queryKey: ["/api/auth/me"],
-    enabled: isAuthenticated,
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-
-  useEffect(() => {
-    if (sessionUser) {
-      setCurrentUser(sessionUser);
-      localStorage.setItem("currentUser", JSON.stringify(sessionUser));
-    }
-  }, [sessionUser]);
 
   const login = (user: User) => {
     setCurrentUser(user);
@@ -62,7 +46,7 @@ export function useAuth() {
   return {
     user: currentUser,
     isAuthenticated,
-    isLoading: isLoading || sessionLoading,
+    isLoading,
     login,
     logout,
   };
