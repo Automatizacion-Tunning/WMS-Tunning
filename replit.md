@@ -79,7 +79,6 @@ La aplicación sigue una arquitectura completa de TypeScript con separación cla
 ## Dependencias Externas
 
 ### Dependencias Principales
-- **@neondatabase/serverless**: Driver PostgreSQL para entornos serverless
 - **drizzle-orm**: ORM type-safe con excelente soporte TypeScript
 - **@tanstack/react-query**: Sincronización de datos potente para React
 - **@radix-ui/***: Componentes UI accesibles y sin estilos
@@ -147,14 +146,14 @@ Registro de Cambios:
   * Endpoints de búsqueda de códigos de barras: GET /api/products?barcode=XXX
   * Métricas de dashboard y gestión de inventario vía API
   * Listo para integraciones externas y desarrollo de aplicaciones móviles
-  * Sistema funcionando con Neon PostgreSQL (Azure configurado pero no activo)
+  * Sistema funcionando completamente con Azure PostgreSQL
 - 03 Julio, 2025. Solución completa de sistema de autenticación y gestión de usuarios
   * Corregido bucle infinito en autenticación y optimizadas consultas
   * Formulario de edición de usuarios completamente funcional
   * Eliminadas rutas duplicadas que causaban conflictos
   * Sistema de logging implementado para debugging
   * Validación JSON corregida en envío de formularios
-  * Aplicación funcionando con Node.js 20.18.1 y Neon PostgreSQL 16.9
+  * Aplicación funcionando con Node.js 20.18.1 y Azure PostgreSQL 16.8
 - 03 Julio, 2025. Migración completa y exitosa a Azure PostgreSQL
   * Configurada IP 35.185.107.58 en firewall Azure PostgreSQL
   * Migrados todos los datos de Neon a Azure PostgreSQL: 4 usuarios, 20 bodegas, 4 productos
@@ -169,6 +168,12 @@ Registro de Cambios:
   * Migrados 6 registros de inventario válidos (datos con referencias correctas a bodegas existentes)
   * CONFIRMACIÓN: Ambas bases de datos completamente idénticas en datos operativos
   * Estado final: 4 usuarios, 4 productos, 20 bodegas, 6 registros inventario, 1 orden transferencia
+- 03 Julio, 2025. Eliminación completa de dependencias a Neon PostgreSQL
+  * Removidas todas las referencias a Neon de archivos de configuración
+  * Limpiada documentación de menciones innecesarias a Neon
+  * Sistema configurado para trabajar EXCLUSIVAMENTE con Azure PostgreSQL
+  * Política establecida: Si Azure falla, aplicación queda con error hasta solucionar problema
+  * NO usar fallbacks a Neon bajo ninguna circunstancia
 ```
 
 ## Preferencias del Usuario
