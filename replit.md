@@ -26,11 +26,11 @@ La aplicación sigue una arquitectura completa de TypeScript con separación cla
 ### Arquitectura de Base de Datos
 - **ORM**: Drizzle ORM con definiciones de esquema TypeScript-first
 - **Migraciones**: Drizzle Kit para gestión de esquemas
-- **Conexión**: Neon PostgreSQL 16.9 con cifrado SSL (temporal)
-- **Conexión Azure**: Configurada pero no activa por problemas de conectividad
-- **Host Azure**: tunning-innovaoper-erp.postgres.database.azure.com  
-- **Usuario Azure**: administrador_Innovaoper (usuario fijo y correcto)
-- **Base de Datos Azure**: WMS_Compras
+- **Conexión**: Azure PostgreSQL 16.8 con cifrado SSL
+- **Host**: tunning-innovaoper-erp.postgres.database.azure.com  
+- **Usuario**: administrador_Innovaoper (usuario fijo y correcto)
+- **Base de Datos**: WMS_Compras
+- **IP Autorizada**: 35.185.107.58 (IP de Replit configurada en firewall Azure)
 
 ## Componentes Principales
 
@@ -155,6 +155,12 @@ Registro de Cambios:
   * Sistema de logging implementado para debugging
   * Validación JSON corregida en envío de formularios
   * Aplicación funcionando con Node.js 20.18.1 y Neon PostgreSQL 16.9
+- 03 Julio, 2025. Migración completa y exitosa a Azure PostgreSQL
+  * Configurada IP 35.185.107.58 en firewall Azure PostgreSQL
+  * Migrados todos los datos de Neon a Azure PostgreSQL: 4 usuarios, 20 bodegas, 4 productos
+  * Esquemas recreados exactamente para mantener compatibilidad total
+  * Sistema ahora funcionando 100% en Azure PostgreSQL (tunning-innovaoper-erp.postgres.database.azure.com)
+  * Base de datos WMS_Compras completamente operativa con usuario administrador_Innovaoper
 ```
 
 ## Preferencias del Usuario
