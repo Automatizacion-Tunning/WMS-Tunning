@@ -34,14 +34,17 @@ export const warehouses = pgTable("warehouses", {
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 200 }).notNull(),
-  sku: varchar("sku", { length: 50 }).notNull().unique(),
-  barcode: varchar("barcode", { length: 100 }).unique(),
+  sku: varchar("sku", { length: 50 }),
+  barcode: varchar("barcode", { length: 100 }),
   description: text("description"),
-  minStock: integer("min_stock").notNull().default(0),
-  productType: varchar("product_type", { length: 20 }).notNull().default("tangible"), // 'tangible' or 'intangible'
-  requiresSerial: boolean("requires_serial").notNull().default(false),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  category: varchar("category", { length: 100 }),
+  minStock: integer("min_stock").default(0),
+  maxStock: integer("max_stock").default(1000),
+  productType: varchar("product_type", { length: 20 }).default("tangible"),
+  requiresSerial: boolean("requires_serial").default(false),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Tabla para precios mensuales

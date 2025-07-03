@@ -159,8 +159,10 @@ Registro de Cambios:
   * Configurada IP 35.185.107.58 en firewall Azure PostgreSQL
   * Migrados todos los datos de Neon a Azure PostgreSQL: 4 usuarios, 20 bodegas, 4 productos
   * Esquemas recreados exactamente para mantener compatibilidad total
+  * Corregidas diferencias de columnas entre esquema y base de datos
   * Sistema ahora funcionando 100% en Azure PostgreSQL (tunning-innovaoper-erp.postgres.database.azure.com)
   * Base de datos WMS_Compras completamente operativa con usuario administrador_Innovaoper
+  * Dashboard, inventario, productos y todas las funcionalidades completamente operativas
 ```
 
 ## Preferencias del Usuario
