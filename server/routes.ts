@@ -70,14 +70,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/warehouses/:id", async (req, res) => {
     try {
+      console.log("🔄 Actualizando bodega ID:", req.params.id);
+      console.log("📝 Datos recibidos:", JSON.stringify(req.body, null, 2));
+      
       const validatedData = insertWarehouseSchema.partial().parse(req.body);
+      console.log("✅ Datos validados:", JSON.stringify(validatedData, null, 2));
+      
       const warehouse = await storage.updateWarehouse(parseInt(req.params.id), validatedData);
       if (!warehouse) {
         return res.status(404).json({ message: "Warehouse not found" });
       }
       res.json(warehouse);
     } catch (error) {
-      res.status(400).json({ message: "Invalid warehouse data", error });
+      console.error("❌ Error actualizando bodega:", error);
+      res.status(400).json({ message: "Invalid warehouse data", error: error.message || error });
     }
   });
 

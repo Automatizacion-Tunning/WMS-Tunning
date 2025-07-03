@@ -566,15 +566,17 @@ function EditWarehouseDialog({
       onClose();
     },
     onError: (error) => {
+      console.error("❌ Error en la actualización:", error);
       toast({
         title: "Error",
-        description: "No se pudo actualizar la bodega",
+        description: `No se pudo actualizar la bodega: ${error.message || error}`,
         variant: "destructive",
       });
     },
   });
 
   const onSubmit = (data: InsertWarehouse) => {
+    console.log("🔄 Enviando datos del formulario:", data);
     updateMutation.mutate(data);
   };
 
