@@ -73,7 +73,6 @@ export const products = pgTable("products", {
   hasWarranty: boolean("has_warranty").notNull().default(false),
   warrantyMonths: integer("warranty_months"), // Meses de garantía (solo si hasWarranty es true)
   minStock: integer("min_stock").default(0),
-  maxStock: integer("max_stock").default(1000),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

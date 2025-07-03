@@ -159,7 +159,7 @@ export default function ProductManagement() {
                             <strong>Precio Actual:</strong> {formatPrice(product.currentPrice?.price)}
                           </span>
                           <span className="flex items-center gap-1">
-                            <strong>Stock Min/Max:</strong> {product.minStock || 0}/{product.maxStock || 0}
+                            <strong>Stock Mínimo:</strong> {product.minStock || 0}
                           </span>
                         </div>
                       </div>

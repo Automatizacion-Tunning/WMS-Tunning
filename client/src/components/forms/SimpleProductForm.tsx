@@ -22,7 +22,6 @@ const productFormSchema = z.object({
   productType: z.enum(["tangible", "intangible"]).default("tangible"),
   requiresSerial: z.boolean().default(false),
   isActive: z.boolean().default(true),
-  maxStock: z.number().min(0).default(0),
   unitId: z.number().min(1, "Debe seleccionar una unidad"),
   categoryId: z.number().min(1, "Debe seleccionar una categoría"),
   brandId: z.number().min(1, "Debe seleccionar una marca"),
@@ -66,7 +65,6 @@ export default function SimpleProductForm({ onSuccess, onCancel }: SimpleProduct
       productType: "tangible",
       requiresSerial: false,
       isActive: true,
-      maxStock: 0,
       unitId: 0,
       categoryId: 0,
       brandId: 0,
@@ -332,28 +330,6 @@ export default function SimpleProductForm({ onSuccess, onCancel }: SimpleProduct
             )}
           />
         )}
-
-        {/* Stock Máximo */}
-        <FormField
-          control={form.control}
-          name="maxStock"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Stock Máximo</FormLabel>
-              <FormControl>
-                <Input 
-                  type="number" 
-                  {...field} 
-                  value={field.value || 0}
-                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                  placeholder="0" 
-                  min="0"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
 
         {/* Tipo de Producto */}
         <FormField
