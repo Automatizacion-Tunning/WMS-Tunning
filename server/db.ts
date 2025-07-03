@@ -2,29 +2,21 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from "@shared/schema";
 
-console.log('🔍 Configurando Azure PostgreSQL con configuración optimizada...');
-console.log(`Azure Host: ${process.env.AZURE_DB_HOST}`);
+console.log('🔍 Configurando base de datos...');
+console.log(`IP actual de Replit: 35.185.107.58`);
+console.log(`⚠️ Esta IP debe estar autorizada en Azure PostgreSQL firewall`);
+console.log(`💡 Mientras tanto, usando Neon PostgreSQL con todos los datos`);
 
-// Configurar conexión a Azure PostgreSQL con timeouts más largos y configuración optimizada
+// Temporalmente usar Neon hasta que se configure firewall Azure
 const connectionConfig = {
-  host: process.env.AZURE_DB_HOST,
-  user: process.env.AZURE_DB_USER,
-  password: process.env.AZURE_DB_PASSWORD,
-  database: process.env.AZURE_DB_NAME,
-  port: parseInt(process.env.AZURE_DB_PORT || '5432'),
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 20000,
-  acquireTimeoutMillis: 60000,
-  ssl: { 
-    rejectUnauthorized: false,
-    mode: 'require'
-  },
-  keepAlive: true,
-  keepAliveInitialDelayMillis: 10000
+  connectionString: process.env.DATABASE_URL,
+  max: 5,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 5000,
+  ssl: { rejectUnauthorized: false }
 };
 
-console.log(`🔗 Conectando a Azure PostgreSQL: ${process.env.AZURE_DB_HOST}`);
+console.log(`📡 Conectando a Neon PostgreSQL (datos completos disponibles)`);
 
 export const pool = new Pool(connectionConfig);
 export const db = drizzle({ client: pool, schema });
