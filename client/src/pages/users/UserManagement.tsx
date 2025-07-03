@@ -75,7 +75,7 @@ export default function UserManagement() {
       case USER_ROLES.PROJECT_MANAGER:
         return "Jefe de Proyecto";
       case USER_ROLES.WAREHOUSE_OPERATOR:
-        return "Operador de Bodega";
+        return "Operador";
       default:
         return "Usuario";
     }
@@ -132,7 +132,7 @@ export default function UserManagement() {
               <option value="">Todos los roles</option>
               <option value={USER_ROLES.ADMIN}>Administrador</option>
               <option value={USER_ROLES.PROJECT_MANAGER}>Jefe de Proyecto</option>
-              <option value={USER_ROLES.WAREHOUSE_OPERATOR}>Operador de Bodega</option>
+              <option value={USER_ROLES.WAREHOUSE_OPERATOR}>Operador</option>
               <option value={USER_ROLES.USER}>Usuario</option>
             </select>
           </div>

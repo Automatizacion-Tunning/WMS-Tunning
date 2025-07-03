@@ -171,7 +171,7 @@ export default function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
                 </FormControl>
                 <SelectContent>
                   <SelectItem value={USER_ROLES.USER}>Usuario</SelectItem>
-                  <SelectItem value={USER_ROLES.WAREHOUSE_OPERATOR}>Operador de Bodega</SelectItem>
+                  <SelectItem value={USER_ROLES.WAREHOUSE_OPERATOR}>Operador</SelectItem>
                   <SelectItem value={USER_ROLES.PROJECT_MANAGER}>Jefe de Proyecto</SelectItem>
                   <SelectItem value={USER_ROLES.ADMIN}>Administrador</SelectItem>
                 </SelectContent>
