@@ -892,7 +892,6 @@ export class DatabaseStorage implements IStorage {
       brandId: products.brandId,
       hasWarranty: products.hasWarranty,
       warrantyMonths: products.warrantyMonths,
-      minStock: products.minStock,
       isActive: products.isActive,
       createdAt: products.createdAt,
       updatedAt: products.updatedAt,
@@ -931,21 +930,13 @@ export class DatabaseStorage implements IStorage {
       brandId: row.brandId,
       hasWarranty: row.hasWarranty,
       warrantyMonths: row.warrantyMonths,
-      minStock: row.minStock,
       isActive: row.isActive,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       unit: row.unit,
       category: row.category,
       brand: row.brand,
-      currentPrice: row.priceId ? {
-        id: row.priceId,
-        productId: row.priceProductId!,
-        year: row.priceYear!,
-        month: row.priceMonth!,
-        price: row.price!,
-        createdAt: row.priceCreatedAt!,
-      } : undefined,
+      currentPrice: row.price ? row.price : null,
     }));
   }
 }

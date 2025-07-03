@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { productEntrySchema, type Product, type ProductWithDetails } from "@shared/schema";
+import { productEntrySchema, type Product } from "@shared/schema";
 import { z } from "zod";
 import { Plus, X, Package, Building2, Scan, Info } from "lucide-react";
 import { useBarcodeFlow } from "@/hooks/useBarcodeFlow";
@@ -31,8 +31,8 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
   const [serialNumbers, setSerialNumbers] = useState<string[]>([]);
   const [serialInput, setSerialInput] = useState("");
 
-  const { data: products = [] } = useQuery<ProductWithDetails[]>({
-    queryKey: ["/api/products/with-details"],
+  const { data: products = [] } = useQuery<Product[]>({
+    queryKey: ["/api/products"],
   });
 
   // Centros de costo predefinidos
@@ -238,26 +238,18 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
                 <div>
-                  <span className="font-medium text-gray-600">Categoría:</span>
-                  <p className="text-gray-900">{selectedProduct.category?.name || 'Sin categoría'}</p>
+                  <span className="font-medium text-gray-600">SKU:</span>
+                  <p className="text-gray-900">{selectedProduct.sku || 'Sin SKU'}</p>
                 </div>
                 
                 <div>
-                  <span className="font-medium text-gray-600">Marca:</span>
-                  <p className="text-gray-900">{selectedProduct.brand?.name || 'Sin marca'}</p>
-                </div>
-                
-                <div>
-                  <span className="font-medium text-gray-600">Unidad:</span>
-                  <p className="text-gray-900">
-                    {selectedProduct.unit?.name || 'Sin unidad'} 
-                    {selectedProduct.unit?.abbreviation && ` (${selectedProduct.unit.abbreviation})`}
-                  </p>
+                  <span className="font-medium text-gray-600">Código de Barras:</span>
+                  <p className="text-gray-900">{selectedProduct.barcode || 'Sin código'}</p>
                 </div>
                 
                 <div>
                   <span className="font-medium text-gray-600">Tipo:</span>
-                  <p className="text-gray-900 capitalize">{selectedProduct.productType}</p>
+                  <p className="text-gray-900 capitalize">{selectedProduct.productType || 'Sin especificar'}</p>
                 </div>
                 
                 <div>
@@ -278,15 +270,6 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
                   <div>
                     <span className="font-medium text-gray-600">Garantía:</span>
                     <p className="text-gray-900">{selectedProduct.warrantyMonths} meses</p>
-                  </div>
-                )}
-                
-                {selectedProduct.currentPrice && (
-                  <div>
-                    <span className="font-medium text-gray-600">Precio Actual:</span>
-                    <p className="text-gray-900 font-semibold">
-                      ${selectedProduct.currentPrice.toLocaleString('es-CL')} CLP
-                    </p>
                   </div>
                 )}
               </div>
