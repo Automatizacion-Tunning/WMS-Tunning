@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Package, Tags, Award, Ruler, Clock, Settings } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import SimpleProductForm from "@/components/forms/SimpleProductForm";
 import EditProductForm from "@/components/forms/EditProductForm";
 import CategoryManagement from "./CategoryManagement";
@@ -101,16 +100,14 @@ export default function ProductManagement() {
                   Nuevo Producto
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden">
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Crear Nuevo Producto</DialogTitle>
                   <DialogDescription>
                     Complete los detalles del nuevo producto. Todos los campos marcados con * son obligatorios.
                   </DialogDescription>
                 </DialogHeader>
-                <ScrollArea className="max-h-[calc(85vh-120px)] pr-4">
-                  <SimpleProductForm onSuccess={handleCreateProduct} />
-                </ScrollArea>
+                <SimpleProductForm onSuccess={handleCreateProduct} />
               </DialogContent>
             </Dialog>
           </div>
@@ -196,22 +193,20 @@ export default function ProductManagement() {
 
       {/* Diálogo de Edición */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Producto</DialogTitle>
             <DialogDescription>
               Modifique los detalles del producto. Todos los campos marcados con * son obligatorios.
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="max-h-[calc(85vh-120px)] pr-4">
-            {selectedProduct && (
-              <EditProductForm 
-                product={selectedProduct}
-                onSuccess={handleEditSuccess}
-                onCancel={() => setIsEditDialogOpen(false)}
-              />
-            )}
-          </ScrollArea>
+          {selectedProduct && (
+            <EditProductForm 
+              product={selectedProduct}
+              onSuccess={handleEditSuccess}
+              onCancel={() => setIsEditDialogOpen(false)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
