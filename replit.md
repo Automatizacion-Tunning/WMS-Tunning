@@ -171,8 +171,10 @@ Registro de Cambios:
 - 03 Julio, 2025. Eliminación completa de dependencias a Neon PostgreSQL
   * Removidas todas las referencias a Neon de archivos de configuración
   * Limpiada documentación de menciones innecesarias a Neon
+  * Eliminados secretos de Neon del panel de Replit (DATABASE_URL, PGHOST, etc.)
   * Sistema configurado para trabajar EXCLUSIVAMENTE con Azure PostgreSQL
   * Política establecida: Si Azure falla, aplicación queda con error hasta solucionar problema
+  * Verificado: Solo credenciales Azure activas, aplicación funcionando correctamente
   * NO usar fallbacks a Neon bajo ninguna circunstancia
 ```
 
