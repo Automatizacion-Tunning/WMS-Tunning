@@ -26,6 +26,7 @@ const productFormSchema = z.object({
   unitId: z.number().min(1, "Debe seleccionar una unidad"),
   categoryId: z.number().min(1, "Debe seleccionar una categoría"),
   brandId: z.number().min(1, "Debe seleccionar una marca"),
+  hasWarranty: z.boolean().default(false),
   warrantyMonths: z.number().min(0, "La garantía debe ser mayor o igual a 0").default(0),
   currentPrice: z.number().min(0, "El precio debe ser mayor a 0"),
 });
@@ -69,6 +70,7 @@ export default function SimpleProductForm({ onSuccess, onCancel }: SimpleProduct
       unitId: 0,
       categoryId: 0,
       brandId: 0,
+      hasWarranty: false,
       warrantyMonths: 0,
       currentPrice: 0,
     },
@@ -286,24 +288,50 @@ export default function SimpleProductForm({ onSuccess, onCancel }: SimpleProduct
         {/* Garantía */}
         <FormField
           control={form.control}
-          name="warrantyMonths"
+          name="hasWarranty"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Garantía (meses)</FormLabel>
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
               <FormControl>
-                <Input 
-                  type="number" 
-                  {...field} 
-                  value={field.value || 0}
-                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                  placeholder="0" 
-                  min="0"
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
                 />
               </FormControl>
-              <FormMessage />
+              <div className="space-y-1 leading-none">
+                <FormLabel>
+                  Tiene Garantía
+                </FormLabel>
+                <p className="text-sm text-muted-foreground">
+                  Activar si el producto incluye garantía
+                </p>
+              </div>
             </FormItem>
           )}
         />
+
+        {/* Meses de Garantía - Solo si tiene garantía */}
+        {form.watch("hasWarranty") && (
+          <FormField
+            control={form.control}
+            name="warrantyMonths"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Meses de Garantía *</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    {...field} 
+                    value={field.value || 0}
+                    onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                    placeholder="Ej: 12, 24, 36" 
+                    min="1"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         {/* Stock Máximo */}
         <FormField

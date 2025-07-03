@@ -1,29 +1,40 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { insertProductSchema } from "@shared/schema";
-import BarcodeScannerNative from "@/components/ui/barcode-scanner-native";
+import { apiRequest } from "@/lib/queryClient";
+import { type Unit, type Category, type Brand, type ProductWithCurrentPrice } from "@shared/schema";
 import { z } from "zod";
-import { Scan } from "lucide-react";
-import type { Product } from "@shared/schema";
 
-const productFormSchema = insertProductSchema.extend({
+// Esquema para edición de productos
+const editProductFormSchema = z.object({
+  name: z.string().min(1, "El nombre es requerido"),
+  sku: z.string().optional(),
+  barcode: z.string().optional(),
+  description: z.string().optional(),
+  productType: z.enum(["tangible", "intangible"]).default("tangible"),
+  requiresSerial: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+  maxStock: z.number().min(0).default(0),
+  unitId: z.number().min(1, "Debe seleccionar una unidad"),
+  categoryId: z.number().min(1, "Debe seleccionar una categoría"),
+  brandId: z.number().min(1, "Debe seleccionar una marca"),
+  hasWarranty: z.boolean().default(false),
+  warrantyMonths: z.number().min(0, "La garantía debe ser mayor o igual a 0").default(0),
   currentPrice: z.number().min(0, "El precio debe ser mayor a 0"),
 });
 
-type ProductFormData = z.infer<typeof productFormSchema>;
+type EditProductFormData = z.infer<typeof editProductFormSchema>;
 
 interface EditProductFormProps {
-  product: Product;
+  product: ProductWithCurrentPrice;
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -31,360 +42,400 @@ interface EditProductFormProps {
 export default function EditProductForm({ product, onSuccess, onCancel }: EditProductFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<ProductFormData>({
-    resolver: zodResolver(productFormSchema),
+  // Obtener opciones para los selectores
+  const { data: units = [] } = useQuery<Unit[]>({
+    queryKey: ["/api/units"],
+  });
+
+  const { data: categories = [] } = useQuery<Category[]>({
+    queryKey: ["/api/categories"],
+  });
+
+  const { data: brands = [] } = useQuery<Brand[]>({
+    queryKey: ["/api/brands"],
+  });
+
+  const form = useForm<EditProductFormData>({
+    resolver: zodResolver(editProductFormSchema),
     defaultValues: {
       name: product.name,
-      sku: product.sku,
+      sku: product.sku || "",
       barcode: product.barcode || "",
       description: product.description || "",
-      minStock: product.minStock,
-      productType: product.productType,
-      requiresSerial: product.requiresSerial,
-      isActive: product.isActive,
-      currentPrice: 0, // Will be set from current price API
+      productType: product.productType || "tangible",
+      requiresSerial: product.requiresSerial || false,
+      isActive: product.isActive ?? true,
+      maxStock: product.maxStock || 0,
+      unitId: product.unitId || 0,
+      categoryId: product.categoryId || 0,
+      brandId: product.brandId || 0,
+      hasWarranty: product.hasWarranty || false,
+      warrantyMonths: product.warrantyMonths || 0,
+      currentPrice: parseFloat(product.currentPrice?.price || "0"),
     },
   });
 
-  // Funciones para el escáner de código de barras
-  const handleBarcodeScanned = async (barcode: string) => {
-    // Verificar si el código ya existe en otro producto
+  const onSubmit = async (data: EditProductFormData) => {
     try {
-      const response = await fetch(`/api/products?barcode=${encodeURIComponent(barcode)}`);
-      if (response.ok) {
-        const existingProduct = await response.json();
-        if (existingProduct.id !== product.id) {
-          toast({
-            title: "Código de barras duplicado",
-            description: `Este código ya está asignado al producto "${existingProduct.name}" (SKU: ${existingProduct.sku})`,
-            variant: "destructive",
-          });
-          setIsBarcodeScannerOpen(false);
-          return;
-        }
-      }
-    } catch (error) {
-      // Si hay error en la verificación, continuar (probablemente el código no existe)
-    }
-
-    form.setValue("barcode", barcode);
-    setIsBarcodeScannerOpen(false);
-    toast({
-      title: "Código escaneado",
-      description: `Código ${barcode} agregado al producto`,
-    });
-  };
-
-  // Validar código de barras cuando se escribe manualmente
-  const validateBarcode = async (barcode: string) => {
-    if (!barcode || barcode === product.barcode) return; // No validar si está vacío o es el mismo código actual
-    
-    try {
-      const response = await fetch(`/api/products?barcode=${encodeURIComponent(barcode)}`);
-      if (response.ok) {
-        const existingProduct = await response.json();
-        if (existingProduct.id !== product.id) {
-          form.setError("barcode", {
-            type: "manual",
-            message: `Este código ya está asignado al producto "${existingProduct.name}" (SKU: ${existingProduct.sku})`
-          });
-          toast({
-            title: "Código de barras duplicado",
-            description: `Este código ya está asignado al producto "${existingProduct.name}"`,
-            variant: "destructive",
-          });
-        }
-      } else {
-        // Si la respuesta es 404, el código no existe (válido)
-        form.clearErrors("barcode");
-      }
-    } catch (error) {
-      // Error en la verificación, no hacer nada
-    }
-  };
-
-  const updateProductMutation = useMutation({
-    mutationFn: async (data: ProductFormData) => {
+      setIsSubmitting(true);
+      
+      // Separar precio del resto de datos
       const { currentPrice, ...productData } = data;
       
-      const response = await fetch(`/api/products/${product.id}`, {
+      // Actualizar el producto
+      const response = await apiRequest(`/api/products/${product.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(productData),
+        body: JSON.stringify({
+          ...productData,
+          currentPrice: currentPrice || 0,
+        }),
       });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const error = new Error(errorData.message || "Error al actualizar el producto");
-        (error as any).status = response.status;
-        (error as any).data = errorData;
-        throw error;
-      }
-      
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      toast({
-        title: "Producto actualizado",
-        description: "Los cambios se han guardado exitosamente.",
-      });
-      form.reset();
-      onSuccess?.();
-    },
-    onError: (error: any) => {
-      if (error.status === 409) {
-        // Error de código de barras duplicado
-        const errorData = error.data || {};
-        const existingProduct = errorData.existingProduct;
-        
-        if (existingProduct) {
-          form.setError("barcode", {
-            type: "manual",
-            message: `Este código ya está asignado al producto "${existingProduct.name}" (SKU: ${existingProduct.sku})`
-          });
-        }
-        
-        toast({
-          title: "Código de barras duplicado",
-          description: existingProduct 
-            ? `Este código ya está asignado al producto "${existingProduct.name}"`
-            : "Este código de barras ya está en uso",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: "No se pudo actualizar el producto. Intenta nuevamente.",
-          variant: "destructive",
-        });
-      }
-    },
-  });
 
-  const onSubmit = async (data: ProductFormData) => {
-    updateProductMutation.mutate(data);
+      if (response.ok) {
+        toast({
+          title: "Producto actualizado",
+          description: "El producto ha sido actualizado exitosamente",
+        });
+        
+        // Invalidar cache
+        queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+        
+        // Callback de éxito
+        onSuccess?.();
+      } else {
+        throw new Error("Error al actualizar el producto");
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar el producto. Intente nuevamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>Editar Producto</DialogTitle>
-      </DialogHeader>
-      
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Nombre del Producto</FormLabel>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* Nombre del Producto */}
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Nombre del Producto *</FormLabel>
+              <FormControl>
+                <Input {...field} placeholder="Ingrese el nombre del producto" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* SKU */}
+        <FormField
+          control={form.control}
+          name="sku"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>SKU</FormLabel>
+              <FormControl>
+                <Input {...field} value={field.value || ""} placeholder="Código SKU del producto" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Código de Barras */}
+        <FormField
+          control={form.control}
+          name="barcode"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Código de Barras</FormLabel>
+              <FormControl>
+                <Input {...field} value={field.value || ""} placeholder="Ej: 1234567890123" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Descripción */}
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Descripción</FormLabel>
+              <FormControl>
+                <Textarea {...field} value={field.value || ""} placeholder="Descripción del producto" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Categoría */}
+        <FormField
+          control={form.control}
+          name="categoryId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Categoría *</FormLabel>
+              <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
                 <FormControl>
-                  <Input placeholder="Ej: Laptop Dell XPS" {...field} />
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione una categoría" />
+                  </SelectTrigger>
                 </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id.toString()}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-          <FormField
-            control={form.control}
-            name="sku"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>SKU</FormLabel>
+        {/* Marca */}
+        <FormField
+          control={form.control}
+          name="brandId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Marca *</FormLabel>
+              <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
                 <FormControl>
-                  <Input placeholder="Ej: LAPTOP-001" {...field} />
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione una marca" />
+                  </SelectTrigger>
                 </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                <SelectContent>
+                  {brands.map((brand) => (
+                    <SelectItem key={brand.id} value={brand.id.toString()}>
+                      {brand.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-          <FormField
-            control={form.control}
-            name="barcode"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Código de Barras</FormLabel>
-                <div className="flex gap-2">
-                  <FormControl>
-                    <Input 
-                      placeholder="Ej: 123456789012" 
-                      {...field} 
-                      value={field.value || ""}
-                      onBlur={(e) => {
-                        field.onBlur();
-                        validateBarcode(e.target.value);
-                      }}
-                    />
-                  </FormControl>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setIsBarcodeScannerOpen(true)}
-                    title="Escanear código de barras"
-                  >
-                    <Scan className="w-4 h-4" />
-                  </Button>
-                </div>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Descripción</FormLabel>
+        {/* Unidad de Medida */}
+        <FormField
+          control={form.control}
+          name="unitId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Unidad de Medida *</FormLabel>
+              <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
                 <FormControl>
-                  <Textarea 
-                    placeholder="Descripción detallada del producto..." 
-                    {...field}
-                    value={field.value || ""}
-                  />
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione una unidad" />
+                  </SelectTrigger>
                 </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                <SelectContent>
+                  {units.map((unit) => (
+                    <SelectItem key={unit.id} value={unit.id.toString()}>
+                      {unit.name} ({unit.abbreviation})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
+        {/* Precio Actual */}
+        <FormField
+          control={form.control}
+          name="currentPrice"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Precio Actual (CLP) *</FormLabel>
+              <FormControl>
+                <Input 
+                  type="number" 
+                  {...field} 
+                  value={field.value || 0}
+                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                  placeholder="0" 
+                  min="0"
+                  step="0.01"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Garantía */}
+        <FormField
+          control={form.control}
+          name="hasWarranty"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>
+                  Tiene Garantía
+                </FormLabel>
+                <p className="text-sm text-muted-foreground">
+                  Activar si el producto incluye garantía
+                </p>
+              </div>
+            </FormItem>
+          )}
+        />
+
+        {/* Meses de Garantía - Solo si tiene garantía */}
+        {form.watch("hasWarranty") && (
           <FormField
             control={form.control}
-            name="minStock"
+            name="warrantyMonths"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Stock Mínimo</FormLabel>
+                <FormLabel>Meses de Garantía *</FormLabel>
                 <FormControl>
                   <Input 
                     type="number" 
-                    min="0"
-                    step="1"
-                    placeholder="10" 
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    {...field}
-                    value={field.value || ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === "") {
-                        field.onChange("");
-                        return;
-                      }
-                      
-                      const numValue = Number(value);
-                      if (!isNaN(numValue) && numValue >= 0 && Number.isInteger(numValue)) {
-                        field.onChange(numValue);
-                      }
-                    }}
-                    onBlur={(e) => {
-                      if (!e.target.value) {
-                        field.onChange(0);
-                      }
-                    }}
+                    {...field} 
+                    value={field.value || 0}
+                    onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                    placeholder="Ej: 12, 24, 36" 
+                    min="1"
                   />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
+        )}
 
-          <FormField
-            control={form.control}
-            name="productType"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tipo de Producto</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona el tipo" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="tangible">Tangible</SelectItem>
-                    <SelectItem value="intangible">Intangible</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+        {/* Stock Máximo */}
+        <FormField
+          control={form.control}
+          name="maxStock"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Stock Máximo</FormLabel>
+              <FormControl>
+                <Input 
+                  type="number" 
+                  {...field} 
+                  value={field.value || 0}
+                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                  placeholder="0" 
+                  min="0"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-          <FormField
-            control={form.control}
-            name="requiresSerial"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                <div className="space-y-0.5">
-                  <FormLabel className="text-base">
-                    Requiere Número de Serie
-                  </FormLabel>
-                  <div className="text-sm text-muted-foreground">
-                    Activar si el producto necesita números de serie únicos
-                  </div>
-                </div>
+        {/* Tipo de Producto */}
+        <FormField
+          control={form.control}
+          name="productType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Tipo de Producto</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione el tipo" />
+                  </SelectTrigger>
                 </FormControl>
-              </FormItem>
-            )}
-          />
+                <SelectContent>
+                  <SelectItem value="tangible">Tangible</SelectItem>
+                  <SelectItem value="intangible">Intangible</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-          <FormField
-            control={form.control}
-            name="isActive"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                <div className="space-y-0.5">
-                  <FormLabel className="text-base">
-                    Producto Activo
-                  </FormLabel>
-                  <div className="text-sm text-muted-foreground">
-                    Desactivar para ocultar el producto del sistema
-                  </div>
-                </div>
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
+        {/* Requiere Número de Serie */}
+        <FormField
+          control={form.control}
+          name="requiresSerial"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>
+                  Requiere Número de Serie
+                </FormLabel>
+                <p className="text-sm text-muted-foreground">
+                  Activar si el producto necesita números de serie únicos
+                </p>
+              </div>
+            </FormItem>
+          )}
+        />
 
-          <div className="flex justify-end gap-2 pt-4">
+        {/* Producto Activo */}
+        <FormField
+          control={form.control}
+          name="isActive"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>
+                  Producto Activo
+                </FormLabel>
+                <p className="text-sm text-muted-foreground">
+                  Desactivar para ocultar el producto del sistema
+                </p>
+              </div>
+            </FormItem>
+          )}
+        />
+
+        {/* Botones */}
+        <div className="flex justify-end space-x-2">
+          {onCancel && (
             <Button type="button" variant="outline" onClick={onCancel}>
               Cancelar
             </Button>
-            <Button 
-              type="submit" 
-              disabled={updateProductMutation.isPending}
-            >
-              {updateProductMutation.isPending ? "Guardando..." : "Guardar Cambios"}
-            </Button>
-          </div>
-        </form>
-      </Form>
-
-      {/* Escáner de códigos de barras */}
-      <BarcodeScannerNative
-        isOpen={isBarcodeScannerOpen}
-        onClose={() => setIsBarcodeScannerOpen(false)}
-        onScan={handleBarcodeScanned}
-        title="Escanear Código de Barras"
-        description="Apunta la cámara hacia el código de barras del producto"
-      />
-    </>
+          )}
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Guardando..." : "Guardar Cambios"}
+          </Button>
+        </div>
+      </form>
+    </Form>
   );
 }

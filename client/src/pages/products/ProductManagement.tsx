@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Package, Tags, Award, Ruler, Clock, Settings } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import SimpleProductForm from "@/components/forms/SimpleProductForm";
+import EditProductForm from "@/components/forms/EditProductForm";
 import CategoryManagement from "./CategoryManagement";
 import BrandManagement from "./BrandManagement";
 import UnitManagement from "./UnitManagement";
@@ -15,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function ProductManagement() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductWithCurrentPrice | null>(null);
 
   const { data: products = [], isLoading } = useQuery<ProductWithCurrentPrice[]>({
@@ -40,6 +42,16 @@ export default function ProductManagement() {
 
   const handleCreateProduct = () => {
     setIsCreateDialogOpen(false);
+  };
+
+  const handleEditProduct = (product: ProductWithCurrentPrice) => {
+    setSelectedProduct(product);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditSuccess = () => {
+    setIsEditDialogOpen(false);
+    setSelectedProduct(null);
   };
 
   return (
@@ -88,7 +100,7 @@ export default function ProductManagement() {
                   Nuevo Producto
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Crear Nuevo Producto</DialogTitle>
                   <DialogDescription>
@@ -151,8 +163,12 @@ export default function ProductManagement() {
                           </span>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm">
-                        Ver Detalles
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleEditProduct(product)}
+                      >
+                        Editar
                       </Button>
                     </div>
                   </CardContent>
@@ -174,6 +190,25 @@ export default function ProductManagement() {
           <UnitManagement />
         </TabsContent>
       </Tabs>
+
+      {/* Diálogo de Edición */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Producto</DialogTitle>
+            <DialogDescription>
+              Modifique los detalles del producto. Todos los campos marcados con * son obligatorios.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedProduct && (
+            <EditProductForm 
+              product={selectedProduct}
+              onSuccess={handleEditSuccess}
+              onCancel={() => setIsEditDialogOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
