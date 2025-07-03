@@ -61,7 +61,7 @@ export default function ProductDetails() {
               Nuevo Producto
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <SimpleProductForm onSuccess={() => setIsCreateModalOpen(false)} />
           </DialogContent>
         </Dialog>
@@ -152,7 +152,7 @@ export default function ProductDetails() {
       {/* Edit Product Dialog */}
       {editingProduct && (
         <Dialog open={true} onOpenChange={() => setEditingProduct(null)}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <EditProductForm 
               product={editingProduct}
               onSuccess={() => setEditingProduct(null)}
