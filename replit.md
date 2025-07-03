@@ -26,10 +26,11 @@ La aplicación sigue una arquitectura completa de TypeScript con separación cla
 ### Arquitectura de Base de Datos
 - **ORM**: Drizzle ORM con definiciones de esquema TypeScript-first
 - **Migraciones**: Drizzle Kit para gestión de esquemas
-- **Conexión**: Azure PostgreSQL con cifrado SSL
-- **Host**: tunning-innovaoper-erp.postgres.database.azure.com  
-- **Usuario**: administrador_Innovaoper (usuario fijo y correcto)
-- **Base de Datos**: WMS_Compras
+- **Conexión**: Neon PostgreSQL 16.9 con cifrado SSL (temporal)
+- **Conexión Azure**: Configurada pero no activa por problemas de conectividad
+- **Host Azure**: tunning-innovaoper-erp.postgres.database.azure.com  
+- **Usuario Azure**: administrador_Innovaoper (usuario fijo y correcto)
+- **Base de Datos Azure**: WMS_Compras
 
 ## Componentes Principales
 
@@ -146,7 +147,14 @@ Registro de Cambios:
   * Endpoints de búsqueda de códigos de barras: GET /api/products?barcode=XXX
   * Métricas de dashboard y gestión de inventario vía API
   * Listo para integraciones externas y desarrollo de aplicaciones móviles
-  * Integración completa Azure PostgreSQL con API lista para producción
+  * Sistema funcionando con Neon PostgreSQL (Azure configurado pero no activo)
+- 03 Julio, 2025. Solución completa de sistema de autenticación y gestión de usuarios
+  * Corregido bucle infinito en autenticación y optimizadas consultas
+  * Formulario de edición de usuarios completamente funcional
+  * Eliminadas rutas duplicadas que causaban conflictos
+  * Sistema de logging implementado para debugging
+  * Validación JSON corregida en envío de formularios
+  * Aplicación funcionando con Node.js 20.18.1 y Neon PostgreSQL 16.9
 ```
 
 ## Preferencias del Usuario
