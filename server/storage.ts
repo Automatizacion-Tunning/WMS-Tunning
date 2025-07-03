@@ -190,6 +190,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateWarehouse(id: number, updateData: Partial<InsertWarehouse>): Promise<Warehouse | undefined> {
+    console.log("📦 updateWarehouse ID:", id);
+    console.log("📦 updateWarehouse updateData:", JSON.stringify(updateData, null, 2));
+    console.log("📦 updateData keys:", Object.keys(updateData));
+    console.log("📦 updateData values:", Object.values(updateData));
+    
     const [warehouse] = await db.update(warehouses)
       .set(updateData)
       .where(eq(warehouses.id, id))

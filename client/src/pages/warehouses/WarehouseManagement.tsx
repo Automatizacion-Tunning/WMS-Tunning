@@ -554,6 +554,9 @@ function EditWarehouseDialog({
       if (!warehouse) return;
       return apiRequest(`/api/warehouses/${warehouse.id}`, {
         method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(data),
       });
     },
