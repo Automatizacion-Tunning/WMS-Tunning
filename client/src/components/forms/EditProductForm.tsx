@@ -329,27 +329,7 @@ export default function EditProductForm({ product, onSuccess, onCancel }: EditPr
           />
         )}
 
-        {/* Stock Máximo */}
-        <FormField
-          control={form.control}
-          name="maxStock"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Stock Máximo</FormLabel>
-              <FormControl>
-                <Input 
-                  type="number" 
-                  {...field} 
-                  value={field.value || 0}
-                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                  placeholder="0" 
-                  min="0"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+
 
         {/* Tipo de Producto */}
         <FormField
