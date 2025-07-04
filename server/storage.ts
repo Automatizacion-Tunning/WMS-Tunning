@@ -271,7 +271,7 @@ export class DatabaseStorage implements IStorage {
       brandId: products.brandId,
       hasWarranty: products.hasWarranty,
       warrantyMonths: products.warrantyMonths,
-      minStock: products.minStock,
+
       isActive: products.isActive,
       createdAt: products.createdAt,
       updatedAt: products.updatedAt,
@@ -304,7 +304,7 @@ export class DatabaseStorage implements IStorage {
       brandId: row.brandId,
       hasWarranty: row.hasWarranty,
       warrantyMonths: row.warrantyMonths,
-      minStock: row.minStock,
+
       isActive: row.isActive,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -419,6 +419,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getLowStockItems(): Promise<InventoryWithDetails[]> {
+    // Since minStock field was removed, we return items with quantity <= 5 as low stock
     return await db.select({
       id: inventory.id,
       productId: inventory.productId,
@@ -431,7 +432,7 @@ export class DatabaseStorage implements IStorage {
     .from(inventory)
     .innerJoin(products, eq(inventory.productId, products.id))
     .innerJoin(warehouses, eq(inventory.warehouseId, warehouses.id))
-    .where(sql`${inventory.quantity} <= ${products.minStock}`);
+    .where(sql`${inventory.quantity} <= 5`);
   }
 
   // Inventory Movements
@@ -674,7 +675,7 @@ export class DatabaseStorage implements IStorage {
     // Create mock data structure for now
     return orders.map(order => ({
       ...order,
-      product: { id: 1, name: "Mock Product", sku: "MOCK-001", barcode: null, description: null, minStock: 10, productType: "PHYSICAL", requiresSerial: false, isActive: true, createdAt: new Date() },
+      product: { id: 1, name: "Mock Product", sku: "MOCK-001", barcode: null, description: null, productType: "PHYSICAL", requiresSerial: false, isActive: true, createdAt: new Date() },
       sourceWarehouse: { id: 1, name: "Mock Warehouse", location: "Mock Location", costCenter: "PRINCIPAL", parentWarehouseId: null, warehouseType: "PRINCIPAL", subWarehouseType: null, isActive: true, createdAt: new Date() },
       destinationWarehouse: { id: 1, name: "Mock Warehouse", location: "Mock Location", costCenter: "PRINCIPAL", parentWarehouseId: null, warehouseType: "PRINCIPAL", subWarehouseType: null, isActive: true, createdAt: new Date() },
       requester: { id: 1, username: "mock_user", password: "", role: "user", isActive: true, createdAt: new Date() },
@@ -689,7 +690,7 @@ export class DatabaseStorage implements IStorage {
 
     return {
       ...result,
-      product: { id: 1, name: "Mock Product", sku: "MOCK-001", barcode: null, description: null, minStock: 10, productType: "PHYSICAL", requiresSerial: false, isActive: true, createdAt: new Date() },
+      product: { id: 1, name: "Mock Product", sku: "MOCK-001", barcode: null, description: null, productType: "PHYSICAL", requiresSerial: false, isActive: true, createdAt: new Date() },
       sourceWarehouse: { id: 1, name: "Mock Warehouse", location: "Mock Location", costCenter: "PRINCIPAL", parentWarehouseId: null, warehouseType: "PRINCIPAL", subWarehouseType: null, isActive: true, createdAt: new Date() },
       destinationWarehouse: { id: 1, name: "Mock Warehouse", location: "Mock Location", costCenter: "PRINCIPAL", parentWarehouseId: null, warehouseType: "PRINCIPAL", subWarehouseType: null, isActive: true, createdAt: new Date() },
       requester: { id: 1, username: "mock_user", password: "", role: "user", isActive: true, createdAt: new Date() },

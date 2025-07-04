@@ -26,7 +26,6 @@ export default function NewProductForm({ onSuccess, onCancel }: NewProductFormPr
       name: "",
       sku: "",
       description: "",
-      minStock: 0,
       productType: "tangible",
       requiresSerial: false,
       currentPrice: 0,
@@ -104,27 +103,7 @@ export default function NewProductForm({ onSuccess, onCancel }: NewProductFormPr
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="minStock"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Stock Mínimo</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="number" 
-                      placeholder="0"
-                      {...field}
-                      onChange={(e) => field.onChange(Number(e.target.value))}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Cantidad mínima antes de alerta de stock
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+
           </div>
 
           {/* Configuración del producto */}

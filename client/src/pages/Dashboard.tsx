@@ -43,7 +43,7 @@ export default function Dashboard() {
 
   const getStockStatus = (item: InventoryWithDetails) => {
     if (item.quantity === 0) return { label: "Sin Stock", variant: "destructive" as const };
-    if (item.quantity <= item.product.minStock) return { label: "Stock Bajo", variant: "secondary" as const };
+    if (item.quantity <= 5) return { label: "Stock Bajo", variant: "secondary" as const };
     return { label: "Disponible", variant: "default" as const };
   };
 

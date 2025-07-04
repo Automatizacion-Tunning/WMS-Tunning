@@ -50,7 +50,7 @@ export default function WarehouseDetails() {
 
   const getStockStatus = (item: InventoryWithDetails) => {
     if (item.quantity === 0) return { label: "Sin Stock", variant: "destructive" as const };
-    if (item.quantity <= item.product.minStock) return { label: "Stock Bajo", variant: "secondary" as const };
+    if (item.quantity <= 5) return { label: "Stock Bajo", variant: "secondary" as const };
     return { label: "Disponible", variant: "default" as const };
   };
 
@@ -111,7 +111,6 @@ export default function WarehouseDetails() {
                     <TableHead>Producto</TableHead>
                     <TableHead>SKU</TableHead>
                     <TableHead>Stock Actual</TableHead>
-                    <TableHead>Stock Mínimo</TableHead>
                     <TableHead>Estado</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -135,9 +134,6 @@ export default function WarehouseDetails() {
                         </TableCell>
                         <TableCell className="text-sm">
                           {item.quantity} unidades
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {item.product.minStock} unidades
                         </TableCell>
                         <TableCell>
                           <Badge variant={status.variant}>

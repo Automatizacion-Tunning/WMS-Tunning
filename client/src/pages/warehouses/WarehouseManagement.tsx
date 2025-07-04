@@ -457,7 +457,6 @@ export default function WarehouseManagement() {
                           <TableHead>SKU</TableHead>
                           <TableHead>Código de Barras</TableHead>
                           <TableHead className="text-center">Cantidad</TableHead>
-                          <TableHead className="text-center">Stock Mínimo</TableHead>
                           <TableHead className="text-center">Estado</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -484,13 +483,10 @@ export default function WarehouseManagement() {
                               <span className="font-bold">{inv.quantity}</span>
                             </TableCell>
                             <TableCell className="text-center">
-                              {inv.product.minStock || "N/A"}
-                            </TableCell>
-                            <TableCell className="text-center">
                               <Badge 
-                                variant={inv.quantity <= (inv.product.minStock ?? 0) ? "destructive" : "default"}
+                                variant={inv.quantity <= 5 ? "destructive" : "default"}
                               >
-                                {inv.quantity <= (inv.product.minStock ?? 0) ? "Stock Bajo" : "Normal"}
+                                {inv.quantity <= 5 ? "Stock Bajo" : "Normal"}
                               </Badge>
                             </TableCell>
                           </TableRow>

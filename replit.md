@@ -203,6 +203,13 @@ Registro de Cambios:
   * REDIRIGIDA ruta /products a ProductManagement (sistema de pestañas)
   * SIMPLIFICADO sistema de navegación: ahora solo "Gestión" y "Alta/Baja" en productos
   * CONFIRMADO: Sistema limpio sin código basura o páginas duplicadas
+- 04 Julio, 2025. Eliminación COMPLETA del campo minStock del sistema
+  * ELIMINADA columna min_stock de la tabla products en base de datos Azure PostgreSQL
+  * ACTUALIZADO esquema shared/schema.ts eliminando minStock de definiciones de tipos
+  * CORREGIDAS todas las consultas en server/storage.ts para no referenciar minStock
+  * IMPLEMENTADA lógica de stock bajo con umbral fijo de 5 unidades (quantity <= 5)
+  * LIMPIADOS formularios frontend: ProductManagement.tsx, NewProductForm.tsx, WarehouseManagement.tsx, WarehouseDetails.tsx
+  * CONFIRMADO: Sistema funcionando sin referencias a minStock, usando umbral fijo para alertas
 ```
 
 ## Preferencias del Usuario
