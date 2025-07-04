@@ -28,14 +28,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/dashboard/low-stock", async (req, res) => {
-    try {
-      const lowStockItems = await storage.getLowStockItems();
-      res.json(lowStockItems);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch low stock items" });
-    }
-  });
+
 
   // Warehouse routes
   app.get("/api/warehouses", async (req, res) => {

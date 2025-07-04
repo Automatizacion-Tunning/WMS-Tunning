@@ -66,7 +66,6 @@ export interface IStorage {
   getInventoryByProduct(productId: number): Promise<InventoryWithDetails[]>;
   getAllInventory(): Promise<InventoryWithDetails[]>;
   updateInventory(productId: number, warehouseId: number, quantity: number): Promise<Inventory>;
-  getLowStockItems(): Promise<InventoryWithDetails[]>;
 
   // Inventory Movements
   createInventoryMovement(movement: InsertInventoryMovement): Promise<InventoryMovement>;
@@ -77,7 +76,6 @@ export interface IStorage {
   getDashboardMetrics(): Promise<{
     totalProducts: number;
     activeWarehouses: number;
-    lowStockCount: number;
     totalInventoryValue: number;
   }>;
 
@@ -418,22 +416,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getLowStockItems(): Promise<InventoryWithDetails[]> {
-    // Since minStock field was removed, we return items with quantity <= 5 as low stock
-    return await db.select({
-      id: inventory.id,
-      productId: inventory.productId,
-      warehouseId: inventory.warehouseId,
-      quantity: inventory.quantity,
-      updatedAt: inventory.updatedAt,
-      product: products,
-      warehouse: warehouses,
-    })
-    .from(inventory)
-    .innerJoin(products, eq(inventory.productId, products.id))
-    .innerJoin(warehouses, eq(inventory.warehouseId, warehouses.id))
-    .where(sql`${inventory.quantity} <= 5`);
-  }
+
 
   // Inventory Movements
   async createInventoryMovement(movement: InsertInventoryMovement): Promise<InventoryMovement> {
@@ -510,8 +493,6 @@ export class DatabaseStorage implements IStorage {
       .from(warehouses)
       .where(eq(warehouses.isActive, true));
 
-    const lowStock = await this.getLowStockItems();
-
     // Para el valor total del inventario, necesitamos usar precios actuales
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -532,7 +513,6 @@ export class DatabaseStorage implements IStorage {
     return {
       totalProducts: totalProducts.count,
       activeWarehouses: activeWarehouses.count,
-      lowStockCount: lowStock.length,
       totalInventoryValue: Number(inventoryValue.total) || 0,
     };
   }

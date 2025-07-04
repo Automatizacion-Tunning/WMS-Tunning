@@ -484,9 +484,9 @@ export default function WarehouseManagement() {
                             </TableCell>
                             <TableCell className="text-center">
                               <Badge 
-                                variant={inv.quantity <= 5 ? "destructive" : "default"}
+                                variant={inv.quantity === 0 ? "destructive" : "default"}
                               >
-                                {inv.quantity <= 5 ? "Stock Bajo" : "Normal"}
+                                {inv.quantity === 0 ? "Sin Stock" : "Disponible"}
                               </Badge>
                             </TableCell>
                           </TableRow>

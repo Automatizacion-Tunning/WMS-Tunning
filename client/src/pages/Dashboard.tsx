@@ -30,9 +30,7 @@ export default function Dashboard() {
     queryKey: ["/api/dashboard/recent-inventory"],
   });
 
-  const { data: lowStockItems, isLoading: lowStockLoading } = useQuery({
-    queryKey: ["/api/dashboard/low-stock"],
-  });
+
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-CL', {
@@ -43,16 +41,15 @@ export default function Dashboard() {
 
   const getStockStatus = (item: InventoryWithDetails) => {
     if (item.quantity === 0) return { label: "Sin Stock", variant: "destructive" as const };
-    if (item.quantity <= 5) return { label: "Stock Bajo", variant: "secondary" as const };
     return { label: "Disponible", variant: "default" as const };
   };
 
   return (
     <div className="space-y-4 md:space-y-6">
       {/* Metrics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
         {metricsLoading ? (
-          Array.from({ length: 4 }).map((_, i) => (
+          Array.from({ length: 3 }).map((_, i) => (
             <Card key={i} className="metric-card">
               <CardContent className="p-4 md:p-6">
                 <Skeleton className="h-16 md:h-20 w-full" />
@@ -75,13 +72,7 @@ export default function Dashboard() {
               icon={Warehouse}
               iconClassName="text-green-600"
             />
-            <MetricCard
-              title="Stock Bajo"
-              value={(metrics as any)?.lowStockCount || 0}
-              subtitle="productos críticos"
-              icon={AlertTriangle}
-              iconClassName="text-red-600"
-            />
+
             <MetricCard
               title="Valor Inventario"
               value={formatCurrency((metrics as any)?.totalInventoryValue || 0)}
@@ -205,7 +196,7 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Quick Actions & Low Stock */}
+        {/* Quick Actions */}
         <div className="space-y-4 md:space-y-6">
           {/* Quick Actions */}
           <Card>
@@ -228,45 +219,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Low Stock Alert */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold flex items-center">
-                <AlertTriangle className="w-5 h-5 mr-2 text-red-600" />
-                Stock Bajo
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {lowStockLoading ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 2 }).map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
-                </div>
-              ) : (lowStockItems as InventoryWithDetails[])?.length > 0 ? (
-                <div className="space-y-3">
-                  {(lowStockItems as InventoryWithDetails[]).slice(0, 3).map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-950/30 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium">{item.product.name}</p>
-                        <p className="text-xs text-muted-foreground">{item.warehouse.name}</p>
-                      </div>
-                      <Badge variant="destructive" className="text-xs">
-                        {item.quantity}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-4">
-                  <CheckCircle className="w-8 h-8 mx-auto text-green-600 mb-2" />
-                  <p className="text-sm text-muted-foreground">
-                    Todos los productos tienen stock suficiente
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+
         </div>
       </div>
     </div>
