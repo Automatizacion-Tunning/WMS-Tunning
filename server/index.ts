@@ -5,13 +5,18 @@ import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 
+const isProduction = process.env.NODE_ENV === "production";
+if (isProduction && !process.env.SESSION_SECRET) {
+  throw new Error("SESSION_SECRET must be set in production");
+}
+
 // Configurar sesiones
 app.use(session({
   secret: process.env.SESSION_SECRET || "wms-secret-key-change-in-production",
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false, // cambiar a true en producción con HTTPS
+    secure: isProduction,
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000 // 24 horas
   }
