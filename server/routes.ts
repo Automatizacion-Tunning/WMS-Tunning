@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { hashPassword } from "./auth";
 import {
   insertUserSchema, insertWarehouseSchema, insertProductSchema,
   insertInventoryMovementSchema, insertTransferOrderSchema,
@@ -650,14 +651,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = userFormSchema.parse(req.body);
 
-      // Convertir "sin_asignar" a undefined para el centro de costo
+      // Convert "sin_asignar" to undefined for the cost center
       if (validatedData.costCenter === "sin_asignar") {
-        delete validatedData.costCenter;
+        validatedData.costCenter = undefined;
       }
 
       if (!validatedData.password) {
         return res.status(400).json({ message: "Password is required" });
       }
+
+      // Hash the password before storing
+      validatedData.password = await hashPassword(validatedData.password);
 
       const user = await storage.createUser(validatedData as InsertUser);
       res.status(201).json({ ...user, password: undefined });
