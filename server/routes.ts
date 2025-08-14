@@ -323,64 +323,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // User routes
-  app.get("/api/users", async (req, res) => {
-    try {
-      const users = await storage.getAllUsers();
-      res.json(users);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch users" });
-    }
-  });
-
-  app.get("/api/users/:id", async (req, res) => {
-    try {
-      const user = await storage.getUser(parseInt(req.params.id));
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      res.json(user);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
-
-  app.post("/api/users", async (req, res) => {
-    try {
-      const validatedData = insertUserSchema.parse(req.body);
-      const user = await storage.createUser(validatedData);
-      res.status(201).json(user);
-    } catch (error) {
-      res.status(400).json({ message: "Invalid user data", error });
-    }
-  });
-
-  app.put("/api/users/:id", async (req, res) => {
-    try {
-      console.log("📝 PUT /api/users/:id - Received data:", JSON.stringify(req.body, null, 2));
-      
-      // Convertir "sin_asignar" a null para el centro de costo
-      const bodyData = { ...req.body };
-      if (bodyData.costCenter === "sin_asignar") {
-        bodyData.costCenter = null;
-      }
-      
-      console.log("📝 Processed data:", JSON.stringify(bodyData, null, 2));
-      
-      const validatedData = insertUserSchema.partial().parse(bodyData);
-      console.log("✅ Validated data:", JSON.stringify(validatedData, null, 2));
-      
-      const user = await storage.updateUser(parseInt(req.params.id), validatedData);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      res.json({ ...user, password: undefined }); // No enviar contraseñas
-    } catch (error) {
-      console.error("❌ PUT /api/users/:id error:", error);
-      res.status(400).json({ message: "Invalid user data", error: error.message || error });
-    }
-  });
-
   // Transfer Orders routes
   app.get("/api/transfer-orders", async (req, res) => {
     try {
@@ -658,33 +600,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/auth/me", async (req, res) => {
-    try {
-      if (!req.session.userId) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
+  // Middleware de autenticación
+  function requireAuth(req: any, res: any, next: any) {
+    if (!req.session.userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    next();
+  }
 
-      const user = await storage.getUser(req.session.userId);
+  app.get("/api/auth/me", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
       if (!user || !user.isActive) {
         return res.status(401).json({ message: "User not found or inactive" });
       }
 
       res.json({ ...user, password: undefined });
-    } catch (error) {
+    } catch (error: any) {
       res.status(500).json({ message: "Failed to get user info", error });
     }
   });
 
-  // Middleware de autenticación
-  const requireAuth = (req: any, res: any, next: any) => {
-    if (!req.session.userId) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-    next();
-  };
-
   // User management routes
-  app.get("/api/users", async (req, res) => {
+  app.get("/api/users", requireAuth, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
       res.json(users.map(user => ({ ...user, password: undefined }))); // No enviar contraseñas
@@ -693,7 +631,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users/:id", async (req, res) => {
+  app.get("/api/users/:id", requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(parseInt(req.params.id));
       if (!user) {
@@ -705,7 +643,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/users", async (req, res) => {
+  app.post("/api/users", requireAuth, async (req, res) => {
     try {
       const validatedData = req.body; // TODO: Add validation with userFormSchema
       
@@ -723,7 +661,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
 
-  app.delete("/api/users/:id", async (req, res) => {
+  app.put("/api/users/:id", requireAuth, async (req, res) => {
+    try {
+      const bodyData = { ...req.body };
+      if (bodyData.costCenter === "sin_asignar") {
+        bodyData.costCenter = null;
+      }
+
+      const validatedData = insertUserSchema.partial().parse(bodyData);
+      const user = await storage.updateUser(parseInt(req.params.id), validatedData);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json({ ...user, password: undefined });
+    } catch (error: any) {
+      res.status(400).json({ message: "Invalid user data", error: error.message || error });
+    }
+  });
+
+  app.delete("/api/users/:id", requireAuth, async (req, res) => {
     try {
       const success = await storage.deleteUser(parseInt(req.params.id));
       if (!success) {
@@ -736,32 +692,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get users by role
-  app.get("/api/users/role/:role", async (req, res) => {
+  app.get("/api/users/role/:role", requireAuth, async (req, res) => {
     try {
       const users = await storage.getUsersByRole(req.params.role);
-      res.json(users.map(user => ({ ...user, password: undefined })));
+      res.json(users.map(user => ({ ...user, password: undefined }))); 
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch users by role" });
     }
   });
 
   // Get project managers
-  app.get("/api/project-managers", async (req, res) => {
+  app.get("/api/project-managers", requireAuth, async (req, res) => {
     try {
       const managers = await storage.getProjectManagers();
-      res.json(managers.map(user => ({ ...user, password: undefined })));
+      res.json(managers.map(user => ({ ...user, password: undefined }))); 
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch project managers" });
     }
   });
 
   // Assign permissions to user
-  app.put("/api/users/:id/permissions", async (req, res) => {
+  app.put("/api/users/:id/permissions", requireAuth, async (req, res) => {
     try {
       const { permissions, managedWarehouses } = req.body;
       const user = await storage.assignPermissions(
-        parseInt(req.params.id), 
-        permissions, 
+        parseInt(req.params.id),
+        permissions,
         managedWarehouses
       );
       if (!user) {
@@ -774,10 +730,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Check user permission
-  app.get("/api/users/:id/permissions/:permission", async (req, res) => {
+  app.get("/api/users/:id/permissions/:permission", requireAuth, async (req, res) => {
     try {
       const hasPermission = await storage.checkUserPermission(
-        parseInt(req.params.id), 
+        parseInt(req.params.id),
         req.params.permission
       );
       res.json({ hasPermission });
