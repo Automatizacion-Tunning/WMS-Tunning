@@ -1,12 +1,15 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { 
-  insertUserSchema, insertWarehouseSchema, insertProductSchema, 
+import {
+  insertUserSchema, insertWarehouseSchema, insertProductSchema,
   insertInventoryMovementSchema, insertTransferOrderSchema,
   insertUnitSchema, insertCategorySchema, insertBrandSchema,
-  transferRequestSchema, stockEntrySchema, warehouseEntrySchema, productEntrySchema
+  transferRequestSchema, stockEntrySchema, warehouseEntrySchema, productEntrySchema,
+  userFormSchema,
+  type InsertUser
 } from "@shared/schema";
+import { ZodError } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard routes
@@ -707,17 +710,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/users", async (req, res) => {
     try {
-      const validatedData = req.body; // TODO: Add validation with userFormSchema
-      
-      // Convertir "sin_asignar" a null para el centro de costo
+      const validatedData = userFormSchema.parse(req.body);
+
+      // Convertir "sin_asignar" a undefined para el centro de costo
       if (validatedData.costCenter === "sin_asignar") {
-        validatedData.costCenter = null;
+        delete validatedData.costCenter;
       }
-      
-      const user = await storage.createUser(validatedData);
+
+      if (!validatedData.password) {
+        return res.status(400).json({ message: "Password is required" });
+      }
+
+      const user = await storage.createUser(validatedData as InsertUser);
       res.status(201).json({ ...user, password: undefined });
     } catch (error) {
-      res.status(400).json({ message: "Invalid user data", error });
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: "Invalid user data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create user" });
     }
   });
 
