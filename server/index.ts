@@ -11,13 +11,29 @@ if (isProduction && !process.env.SESSION_SECRET) {
 }
 
 // Configurar sesiones
+// Permite a Express conocer el esquema original cuando está detrás de un proxy
+app.set("trust proxy", 1);
+
+const secureCookie: boolean | "auto" =
+  process.env.COOKIE_SECURE !== undefined
+    ? process.env.COOKIE_SECURE === "true"
+    : "auto";
+
+const sameSite = process.env.COOKIE_SAME_SITE as
+  | boolean
+  | "lax"
+  | "strict"
+  | "none"
+  | undefined;
+
 app.use(session({
   secret: process.env.SESSION_SECRET || "wms-secret-key-change-in-production",
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: isProduction,
+    secure: secureCookie,
     httpOnly: true,
+    ...(sameSite ? { sameSite } : {}),
     maxAge: 24 * 60 * 60 * 1000 // 24 horas
   }
 }));
