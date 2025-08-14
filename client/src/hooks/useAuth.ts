@@ -6,26 +6,39 @@ export function useAuth() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Verificar si hay un usuario en localStorage al iniciar
   useEffect(() => {
-    const storedUser = localStorage.getItem("currentUser");
-    if (storedUser) {
-      try {
-        const user = JSON.parse(storedUser);
-        setCurrentUser(user);
-        setIsAuthenticated(true);
-      } catch (error) {
-        localStorage.removeItem("currentUser");
+    const checkAuth = async () => {
+      const storedUser = localStorage.getItem("currentUser");
+      if (storedUser) {
+        try {
+          const user = await apiRequest("/api/auth/me");
+          setCurrentUser(user);
+          setIsAuthenticated(true);
+          localStorage.setItem("currentUser", JSON.stringify(user));
+        } catch (err) {
+          if (err instanceof Error && err.message.startsWith("401")) {
+            localStorage.removeItem("currentUser");
+            setCurrentUser(null);
+            setIsAuthenticated(false);
+          } else {
+            setError(err instanceof Error ? err.message : String(err));
+          }
+        }
       }
-    }
-    setIsLoading(false);
+      setIsLoading(false);
+    };
+
+    checkAuth();
   }, []);
 
   const login = (user: User) => {
     setCurrentUser(user);
     setIsAuthenticated(true);
     localStorage.setItem("currentUser", JSON.stringify(user));
+    setError(null);
   };
 
   const logout = async () => {
@@ -38,7 +51,8 @@ export function useAuth() {
     setCurrentUser(null);
     setIsAuthenticated(false);
     localStorage.removeItem("currentUser");
-    
+    setError(null);
+
     // Recargar la página para limpiar completamente el estado
     window.location.reload();
   };
@@ -47,6 +61,7 @@ export function useAuth() {
     user: currentUser,
     isAuthenticated,
     isLoading,
+    error,
     login,
     logout,
   };
