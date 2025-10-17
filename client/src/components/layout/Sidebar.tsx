@@ -72,7 +72,7 @@ function SidebarContent() {
             <Warehouse className="w-4 h-4 text-sidebar-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-sidebar-foreground">WMS</h1>
+            <h1 className="text-lg font-semibold text-sidebar-foreground">WMS TUNNING</h1>
             <p className="text-xs text-muted-foreground">Control de Inventario</p>
           </div>
         </div>
