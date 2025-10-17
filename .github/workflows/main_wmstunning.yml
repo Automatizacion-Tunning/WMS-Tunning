@@ -1,6 +1,4 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
+# Build & Deploy a Azure Web App (Node 20) - WMSTunning
 name: Build and deploy Node.js app to Azure Web App - WMSTunning
 
 on:
@@ -9,57 +7,82 @@ on:
       - main
   workflow_dispatch:
 
+# Evita despliegues solapados
+concurrency:
+  group: wmstunning-deploy
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read #This is required for actions/checkout
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js version
-        uses: actions/setup-node@v3
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '20'
 
-      - name: npm install, build, and test
+      # --- FRONTEND (opcional): solo si existe /client ---
+      - name: Build client (if exists)
         run: |
-          npm install
-          npm run build --if-present
-          npm run test --if-present
+          if [ -d client ]; then
+            cd client
+            npm ci
+            npm run build --if-present
+            cd ..
+            rm -rf server/public && mkdir -p server/public
+            # Copia build del client (según tu toolchain)
+            if [ -d client/dist ]; then cp -r client/dist/* server/public/; fi
+            if [ -d client/build ]; then cp -r client/build/* server/public/; fi
+          fi
 
-      - name: Upload artifact for deployment job
+      # --- BACKEND: instala solo prod y build si aplica ---
+      - name: Install server deps (prod) + build
+        working-directory: server
+        run: |
+          npm ci --omit=dev
+          npm run build --if-present
+
+      # Empaqueta SOLO el server (lo que Azure debe ejecutar)
+      - name: Zip server
+        run: |
+          cd server
+          zip -r $GITHUB_WORKSPACE/app.zip .
+
+      - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4
         with:
-          name: node-app
-          path: .
+          name: app-zip
+          path: app.zip
 
   deploy:
     runs-on: ubuntu-latest
     needs: build
     permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
+      id-token: write   # requerido para OIDC
+      contents: read
 
     steps:
-      - name: Download artifact from build job
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: node-app
-      
-      - name: Login to Azure
+          name: app-zip
+
+      - name: Login to Azure (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_E264FF2BED9F42DB8368E59BB673BA0E }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_DA629E0CDB474E60BE8DE20EE78A2080 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_6BE8805FF86B4C3194207467F6D52477 }}
 
-      - name: 'Deploy to Azure Web App'
-        id: deploy-to-webapp
+      - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'WMSTunning'
-          slot-name: 'Production'
-          package: .
+          app-name: 'WMSTunning'      # EXACTO como en Azure
+          package: app.zip            # <- el zip del server
+          # slot-name: staging        # (NO usar para producción)
           
