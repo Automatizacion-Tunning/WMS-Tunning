@@ -14,13 +14,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      # FRONTEND (opcional, si existe /client)
+      # --- FRONTEND (opcional): solo si existe /client ---
       - name: Build client (if exists)
         run: |
           if [ -d client ]; then
@@ -29,23 +32,27 @@ jobs:
             npm run build --if-present
             cd ..
             rm -rf server/public && mkdir -p server/public
-            if [ -d client/dist ]; then cp -r client/dist/* server/public/; fi
+            # Copia el build del client según toolchain
+            if [ -d client/dist ];  then cp -r client/dist/*  server/public/; fi
             if [ -d client/build ]; then cp -r client/build/* server/public/; fi
           fi
 
-      # BACKEND
-      - name: Install server deps + build
+      # --- BACKEND: instala con dev, compila y luego deja solo prod ---
+      - name: Install server deps + build (with dev) and prune
         working-directory: server
         run: |
-          npm ci --omit=dev
+          npm ci
           npm run build --if-present
+          npm prune --omit=dev
 
+      # Empaqueta SOLO el server (lo que ejecutará Azure)
       - name: Zip server
         run: |
           cd server
           zip -r $GITHUB_WORKSPACE/app.zip .
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload artifact for deployment
+        uses: actions/upload-artifact@v4
         with:
           name: app-zip
           path: app.zip
@@ -54,10 +61,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     permissions:
-      id-token: write
+      id-token: write   # requerido para OIDC
       contents: read
+
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download artifact
+        uses: actions/download-artifact@v4
         with:
           name: app-zip
 
@@ -71,8 +80,10 @@ jobs:
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'WMSTunning'
-          package: app.zip
-          # NO usar slot-name para producción
+          app-name: 'WMSTunning'   # nombre EXACTO del App Service
+          package: app.zip         # zip generado con el server
+          # slot-name: staging     # (solo si despliegas a un slot real)
+
+
 
 
