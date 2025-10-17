@@ -127,9 +127,13 @@ export default function StockEntry() {
           <div className="space-y-4">
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <h4 className="font-medium text-blue-800 mb-2">1. Ingreso Inicial</h4>
+              <p className="text-sm text-blue-700 mb-2">
+                Al ingresar un producto nuevo, debes seleccionar un <strong>Centro de Costo</strong> (PRINCIPAL, UM2, PLATAFORMA, PEM o INTEGRADOR).
+              </p>
               <p className="text-sm text-blue-700">
-                Todo producto debe ingresar especificando un <strong>Centro de Costo</strong>. 
-                El sistema asigna automáticamente la <strong>Bodega Principal</strong> del centro y crea las bodegas si no existen.
+                El producto se guardará automáticamente en la <strong>Bodega Principal</strong> de ese centro. 
+                Si es la primera vez que usas ese centro de costo, el sistema creará automáticamente la bodega principal 
+                y sus 4 sub-bodegas (UM2, Plataforma, PEM, Integrador).
               </p>
             </div>
             
