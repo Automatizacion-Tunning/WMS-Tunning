@@ -10,9 +10,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  build_and_deploy:
     runs-on: ubuntu-latest
     permissions:
+      id-token: write   # requerido para OIDC (azure/login)
       contents: read
 
     steps:
@@ -37,7 +38,7 @@ jobs:
             if [ -d client/build ]; then cp -r client/build/* server/public/; fi
           fi
 
-      # --- BACKEND: instala con dev, compila y luego deja solo prod ---
+      # --- BACKEND: instala con dev para poder compilar, luego deja solo prod ---
       - name: Install server deps + build (with dev) and prune
         working-directory: server
         run: |
@@ -51,25 +52,7 @@ jobs:
           cd server
           zip -r $GITHUB_WORKSPACE/app.zip .
 
-      - name: Upload artifact for deployment
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-zip
-          path: app.zip
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      id-token: write   # requerido para OIDC
-      contents: read
-
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: app-zip
-
+      # Login con OIDC (sin publish profile)
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
@@ -83,6 +66,7 @@ jobs:
           app-name: 'WMSTunning'   # nombre EXACTO del App Service
           package: app.zip         # zip generado con el server
           # slot-name: staging     # (solo si despliegas a un slot real)
+
 
 
 
