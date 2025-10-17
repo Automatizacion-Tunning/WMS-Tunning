@@ -10,6 +10,7 @@ Este proyecto es un sistema integral de gestión de inventarios para bodegas, de
 *   **Moneda**: Peso Chileno (CLP) - Sistema actualizado para usar formato y precios CLP.
 *   **Usuario de Base de Datos**: SIEMPRE usar "administrador_Innovaoper" como nombre de usuario para conexiones Azure PostgreSQL. Nunca usar "tunning-innovaoper-erp" que fue un error.
 *   **Idioma**: Documentación y comunicación siempre en español.
+*   **Tema Visual**: Fondo negro (hsl(0, 0%, 0%)) con botones dorados (hsl(43, 96%, 56%)). Cards y elementos en tonos oscuros para contraste, texto en gris claro para legibilidad.
 
 ## System Architecture
 
@@ -56,4 +57,15 @@ La aplicación emplea una arquitectura full-stack TypeScript, dividida en fronte
 *   **PostgreSQL**: Base de datos relacional.
 *   **Lucide React**: Librería de iconos.
 *   **ZXing**: Librería para escaneo de códigos de barras.
+
+## Recent Changes
+
+- **17 Octubre, 2025**: Implementación de tema visual oscuro
+  * Actualizado `client/src/index.css` con esquema de colores negro y dorado
+  * Fondo principal: Negro puro (hsl(0, 0%, 0%))
+  * Botones primarios: Dorado vibrante (hsl(43, 96%, 56%))
+  * Cards y elementos: Gris muy oscuro (hsl(0, 0%, 8%))
+  * Texto: Gris claro (hsl(0, 0%, 95%)) para máxima legibilidad
+  * Aplicado tanto en modo claro (:root) como oscuro (.dark)
+  * Verificado visualmente en todas las páginas (Dashboard, Productos, Bodegas)
 ```
