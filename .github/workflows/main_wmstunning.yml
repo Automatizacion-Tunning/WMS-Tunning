@@ -1,65 +1,97 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy Node.js app to Azure Web App - WMSTunning
+name: Deploy WMSTunning
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
+concurrency:
+  group: wmstunning-deploy
+  cancel-in-progress: true
+
 jobs:
-  build:
+  build_deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: read #This is required for actions/checkout
+      id-token: write
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js version
-        uses: actions/setup-node@v3
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '20'
 
-      - name: npm install, build, and test
+      - name: Detect package dir
+        id: detect
+        shell: bash
         run: |
-          npm install
-          npm run build --if-present
-          npm run test --if-present
+          if [ -f server/package.json ]; then
+            echo "pkgdir=server" >> $GITHUB_OUTPUT
+          elif [ -f package.json ]; then
+            echo "pkgdir=." >> $GITHUB_OUTPUT
+          else
+            echo "ERROR: no hay package.json en server/ ni en raíz" >&2
+            exit 1
+          fi
 
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
-        with:
-          name: node-app
-          path: .
+      - name: Build client (if exists)
+        shell: bash
+        run: |
+          if [ -d client ]; then
+            pushd client
+            npm ci
+            npm run build --if-present
+            popd
+            RUNTIME_DIR="${{ steps.detect.outputs.pkgdir }}"
+            mkdir -p "${RUNTIME_DIR}/public"
+            if [ -d client/dist ];  then cp -r client/dist/*  "${RUNTIME_DIR}/public/"; fi
+            if [ -d client/build ]; then cp -r client/build/* "${RUNTIME_DIR}/public/"; fi
+          fi
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
+      - name: Build runtime
+        shell: bash
+        run: |
+          set -e
+          PKGDIR="${{ steps.detect.outputs.pkgdir }}"
 
-    steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: node-app
-      
-      - name: Login to Azure
+          if [ "$PKGDIR" = "server" ]; then
+            pushd server
+            npm ci
+            npm run build --if-present
+            npm prune --omit=dev
+            test -f dist/index.js || (echo "ERROR: server/dist/index.js no existe" >&2; ls -R dist; exit 1)
+            popd
+            cd server
+            zip -r $GITHUB_WORKSPACE/app.zip .
+          else
+            npm ci
+            npm run build
+            npm prune --omit=dev
+            rm -rf .release && mkdir -p .release
+            cp package.json package-lock.json .release/ || true
+            cp -r dist .release/dist
+            cp -r node_modules .release/node_modules
+            echo "${{ github.sha }}" > .release/dist/version.txt || true
+            cd .release
+            test -f dist/index.js || (echo "ERROR: dist/index.js no existe" >&2; ls -R dist; exit 1)
+            zip -r $GITHUB_WORKSPACE/app.zip .
+          fi
+
+      - name: List files to be published
+        run: unzip -l $GITHUB_WORKSPACE/app.zip | sed -n '1,200p'
+
+      - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_7D831E36104C41B1B47892117DC617E7 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_28306E18BB9E4895AEC2CF741A28D772 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_54179D15307C41AE95F0A6BAFB212D98 }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_3252DFCC291441C99EF9162DB3AF6167 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_39FC475C67D043EF8C1F99A1DEEEF93D }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_4B12F5CA7B904BFCBCD1D75BE3697847 }}
 
-      - name: 'Deploy to Azure Web App'
-        id: deploy-to-webapp
+      - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'WMSTunning'
-          slot-name: 'Production'
-          package: .
-          
+          package: app.zip
