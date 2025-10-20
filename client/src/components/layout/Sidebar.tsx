@@ -40,6 +40,7 @@ const inventoryNavigation = [
 ];
 
 const ordersNavigation = [
+  { name: "Ingreso Orden de Compra", href: "/orders/purchase-order", icon: FileText },
   { name: "Órdenes de Traspaso", href: "/orders/transfer-orders", icon: RefreshCcw },
 ];
 
