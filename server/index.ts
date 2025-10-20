@@ -5,7 +5,10 @@ import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 
-const isProduction = process.env.NODE_ENV === "production";
+const nodeEnv = process.env.NODE_ENV ?? "production";
+app.set("env", nodeEnv);
+
+const isProduction = nodeEnv === "production";
 if (isProduction && !process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET must be set in production");
 }
@@ -85,7 +88,7 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  if (!isProduction) {
     await setupVite(app, server);
   } else {
     serveStatic(app);
