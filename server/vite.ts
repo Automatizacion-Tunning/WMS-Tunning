@@ -1,9 +1,12 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
+import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
+import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
-import type { InlineConfig, Logger } from "vite";
+
+const viteLogger = createLogger();
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -17,14 +20,6 @@ export function log(message: string, source = "express") {
 }
 
 export async function setupVite(app: Express, server: Server) {
-  const { createServer: createViteServer, createLogger } = await import("vite");
-  const { default: rawViteConfig } = (await import("../vite.config")) as {
-    default: InlineConfig | Promise<InlineConfig>;
-  };
-
-  const resolvedViteConfig = await Promise.resolve(rawViteConfig);
-  const viteLogger: Logger = createLogger();
-
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
@@ -32,7 +27,7 @@ export async function setupVite(app: Express, server: Server) {
   };
 
   const vite = await createViteServer({
-    ...resolvedViteConfig,
+    ...viteConfig,
     configFile: false,
     customLogger: {
       ...viteLogger,
