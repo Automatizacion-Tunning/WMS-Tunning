@@ -10,6 +10,7 @@ export const users = pgTable("users", {
   firstName: varchar("first_name", { length: 100 }),
   lastName: varchar("last_name", { length: 100 }),
   email: varchar("email", { length: 255 }).unique(),
+  ficha: varchar("ficha", { length: 20 }).unique(), // Número de ficha del trabajador (vinculo con pav_office365)
   role: varchar("role", { length: 30 }).notNull().default("user"), // 'admin', 'project_manager', 'warehouse_operator', 'user'
   costCenter: varchar("cost_center", { length: 100 }), // Centro de costo asignado al usuario
   permissions: text("permissions").array(), // Array de permisos específicos
@@ -70,6 +71,7 @@ export const products = pgTable("products", {
   unitId: integer("unit_id").notNull(),
   categoryId: integer("category_id").notNull(),
   brandId: integer("brand_id").notNull(),
+  erpProductCode: varchar("erp_product_code", { length: 100 }), // codprod del ERP para matching con OC
   hasWarranty: boolean("has_warranty").notNull().default(false),
   warrantyMonths: integer("warranty_months"), // Meses de garantía (solo si hasWarranty es true)
   isActive: boolean("is_active").default(true),
@@ -117,8 +119,61 @@ export const inventoryMovements = pgTable("inventory_movements", {
   reason: text("reason"),
   userId: integer("user_id").notNull(),
   transferOrderId: integer("transfer_order_id"), // Vinculado a orden de traspaso si aplica
+  purchaseOrderNumber: varchar("purchase_order_number", { length: 50 }), // numoc de la OC
+  purchaseOrderLine: integer("purchase_order_line"), // numlinea de la OC
+  purchaseOrderCodprod: varchar("purchase_order_codprod", { length: 100 }), // codprod para trazabilidad
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// Tabla para tracking de recepcion de ordenes de compra
+export const purchaseOrderReceipts = pgTable("purchase_order_receipts", {
+  id: serial("id").primaryKey(),
+  purchaseOrderNumber: varchar("purchase_order_number", { length: 50 }).notNull(),
+  purchaseOrderLine: integer("purchase_order_line").notNull(),
+  codprod: varchar("codprod", { length: 100 }),
+  productId: integer("product_id"),
+  orderedQuantity: decimal("ordered_quantity", { precision: 10, scale: 2 }).notNull(),
+  receivedQuantity: decimal("received_quantity", { precision: 10, scale: 2 }).notNull().default("0"),
+  unitPrice: decimal("unit_price", { precision: 12, scale: 2 }),
+  costCenter: varchar("cost_center", { length: 100 }),
+  lastMovementId: integer("last_movement_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueOcLine: unique().on(table.purchaseOrderNumber, table.purchaseOrderLine),
+}));
+
+// RBAC: Tabla de roles
+export const roles = pgTable("roles", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  isSystem: boolean("is_system").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  hierarchy: integer("hierarchy").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// RBAC: Tabla de permisos
+export const permissions = pgTable("permissions", {
+  id: serial("id").primaryKey(),
+  key: varchar("key", { length: 100 }).notNull().unique(),
+  name: varchar("name", { length: 200 }).notNull(),
+  module: varchar("module", { length: 50 }).notNull(),
+  category: varchar("category", { length: 50 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// RBAC: Junction roles <-> permisos
+export const rolePermissions = pgTable("role_permissions", {
+  id: serial("id").primaryKey(),
+  roleId: integer("role_id").notNull(),
+  permissionId: integer("permission_id").notNull(),
+}, (table) => ({
+  uniqueRolePermission: unique().on(table.roleId, table.permissionId),
+}));
 
 // Nueva tabla para órdenes de traspaso
 export const transferOrders = pgTable("transfer_orders", {
@@ -243,6 +298,36 @@ export const inventoryMovementsRelations = relations(inventoryMovements, ({ one 
   }),
 }));
 
+export const purchaseOrderReceiptsRelations = relations(purchaseOrderReceipts, ({ one }) => ({
+  product: one(products, {
+    fields: [purchaseOrderReceipts.productId],
+    references: [products.id],
+  }),
+  lastMovement: one(inventoryMovements, {
+    fields: [purchaseOrderReceipts.lastMovementId],
+    references: [inventoryMovements.id],
+  }),
+}));
+
+export const rolesRelations = relations(roles, ({ many }) => ({
+  rolePermissions: many(rolePermissions),
+}));
+
+export const permissionsRelations = relations(permissions, ({ many }) => ({
+  rolePermissions: many(rolePermissions),
+}));
+
+export const rolePermissionsRelations = relations(rolePermissions, ({ one }) => ({
+  role: one(roles, {
+    fields: [rolePermissions.roleId],
+    references: [roles.id],
+  }),
+  permission: one(permissions, {
+    fields: [rolePermissions.permissionId],
+    references: [permissions.id],
+  }),
+}));
+
 export const transferOrdersRelations = relations(transferOrders, ({ one, many }) => ({
   product: one(products, {
     fields: [transferOrders.productId],
@@ -329,6 +414,18 @@ export const insertBrandSchema = createInsertSchema(brands).omit({
   createdAt: true,
 });
 
+export const insertPurchaseOrderReceiptSchema = createInsertSchema(purchaseOrderReceipts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertRoleSchema = createInsertSchema(roles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -374,6 +471,25 @@ export type InsertCategory = z.infer<typeof insertCategorySchema>;
 
 export type Brand = typeof brands.$inferSelect;
 export type InsertBrand = z.infer<typeof insertBrandSchema>;
+
+export type PurchaseOrderReceipt = typeof purchaseOrderReceipts.$inferSelect;
+export type InsertPurchaseOrderReceipt = z.infer<typeof insertPurchaseOrderReceiptSchema>;
+
+export type Role = typeof roles.$inferSelect;
+export type InsertRole = z.infer<typeof insertRoleSchema>;
+export type Permission = typeof permissions.$inferSelect;
+
+export type RoleWithPermissions = Role & {
+  permissions: Permission[];
+};
+
+export type AuthPermissions = {
+  roleCode: string;
+  roleName: string;
+  isAdmin: boolean;
+  permissions: string[];
+  hierarchy: number;
+};
 
 // Tipo extendido para productos con precio actual
 export type ProductWithCurrentPrice = Product & {
@@ -441,6 +557,18 @@ export const transferRequestSchema = z.object({
   notes: z.string().optional(),
 });
 
+// Esquema para ingreso de producto basado en Orden de Compra
+export const ocProductEntrySchema = z.object({
+  purchaseOrderNumber: z.string().min(1, "Debe seleccionar una orden de compra"),
+  purchaseOrderLine: z.number().min(1, "Debe seleccionar una linea de la OC"),
+  costCenter: z.string().min(1, "Debe seleccionar un centro de costo"),
+  productId: z.number().min(1, "Debe seleccionar o crear un producto"),
+  quantity: z.number().min(1, "La cantidad debe ser mayor a 0"),
+  price: z.number().min(0, "El precio debe ser mayor o igual a 0"),
+  serialNumbers: z.array(z.string()).optional(),
+  reason: z.string().optional(),
+});
+
 // Esquema para ingreso inicial de productos (solo a bodega principal)
 export const stockEntrySchema = z.object({
   productId: z.number().min(1, "Debe seleccionar un producto"),
@@ -488,7 +616,8 @@ export const USER_ROLES = {
   ADMIN: 'admin',
   PROJECT_MANAGER: 'project_manager',
   WAREHOUSE_OPERATOR: 'warehouse_operator',
-  USER: 'user',
+  VIEWER: 'viewer',
+  SIN_ACCESO: 'sin_acceso',
 } as const;
 
 // Esquema para crear/editar usuarios
@@ -498,7 +627,8 @@ export const userFormSchema = z.object({
   firstName: z.string().min(1, "El nombre es requerido"),
   lastName: z.string().min(1, "El apellido es requerido"),
   email: z.string().email("Email inválido").optional(),
-  role: z.enum([USER_ROLES.ADMIN, USER_ROLES.PROJECT_MANAGER, USER_ROLES.WAREHOUSE_OPERATOR, USER_ROLES.USER]),
+  ficha: z.string().optional(),
+  role: z.string().min(1, "Debe seleccionar un rol"),
   costCenter: z.string().optional(),
   permissions: z.array(z.string()).optional(),
   managedWarehouses: z.array(z.number()).optional(),
@@ -510,4 +640,26 @@ export const assignPermissionsSchema = z.object({
   userId: z.number().min(1, "ID de usuario requerido"),
   permissions: z.array(z.string()),
   managedWarehouses: z.array(z.number()).optional(),
+});
+
+// RBAC Schemas
+export const createRoleSchema = z.object({
+  code: z.string().min(1).max(50).regex(/^[a-z0-9_]+$/, "Solo minusculas, numeros y guion bajo"),
+  name: z.string().min(1).max(100),
+  description: z.string().optional(),
+  hierarchy: z.number().min(0).max(99).default(10),
+});
+
+export const updateRoleSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().optional(),
+  hierarchy: z.number().min(0).max(99).optional(),
+});
+
+export const updateRolePermissionsSchema = z.object({
+  permissionKeys: z.array(z.string()),
+});
+
+export const assignRoleSchema = z.object({
+  roleCode: z.string().min(1),
 });

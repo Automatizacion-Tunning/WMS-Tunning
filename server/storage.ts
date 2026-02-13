@@ -1,6 +1,7 @@
-import { 
+import {
   users, warehouses, products, inventory, inventoryMovements, productPrices, productSerials, transferOrders,
-  units, categories, brands,
+  units, categories, brands, purchaseOrderReceipts,
+  roles, permissions, rolePermissions,
   type User, type InsertUser,
   type Warehouse, type InsertWarehouse,
   type Product, type InsertProduct,
@@ -12,16 +13,19 @@ import {
   type Unit, type InsertUnit,
   type Category, type InsertCategory,
   type Brand, type InsertBrand,
+  type PurchaseOrderReceipt,
   type InventoryWithDetails, type InventoryMovementWithDetails,
-  type ProductWithCurrentPrice, type ProductWithDetails, type TransferOrderWithDetails
+  type ProductWithCurrentPrice, type ProductWithDetails, type TransferOrderWithDetails,
+  type Role, type InsertRole, type Permission, type RoleWithPermissions
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { eq, and, desc, asc, sql, inArray, count } from "drizzle-orm";
 
 export interface IStorage {
   // Users
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByFicha(ficha: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
@@ -116,6 +120,29 @@ export interface IStorage {
 
   // Enhanced product operations
   getAllProductsWithDetails(): Promise<ProductWithDetails[]>;
+
+  // Purchase Order Receipt tracking
+  getReceiptsByOC(purchaseOrderNumber: string): Promise<PurchaseOrderReceipt[]>;
+  getOrCreateReceipt(purchaseOrderNumber: string, line: number, ocLine: any): Promise<PurchaseOrderReceipt>;
+  updateReceiptQuantity(id: number, newQuantity: number, productId: number, movementId: number): Promise<PurchaseOrderReceipt>;
+  getProductByErpCode(erpCode: string): Promise<Product | undefined>;
+
+  // RBAC - Roles
+  getAllRoles(): Promise<Role[]>;
+  getRoleById(id: number): Promise<RoleWithPermissions | undefined>;
+  getRoleByCode(code: string): Promise<Role | undefined>;
+  createRole(data: Omit<InsertRole, "isSystem">): Promise<Role>;
+  updateRole(id: number, data: { name?: string; description?: string; hierarchy?: number }): Promise<Role | undefined>;
+  deleteRole(id: number): Promise<boolean>;
+
+  // RBAC - Permissions
+  getRolePermissions(roleId: number): Promise<string[]>;
+  updateRolePermissions(roleId: number, permissionKeys: string[]): Promise<void>;
+  getAllPermissions(): Promise<Permission[]>;
+
+  // RBAC - User-Role
+  getUsersCountByRole(roleCode: string): Promise<number>;
+  assignUserRole(userId: number, roleCode: string): Promise<User | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -127,6 +154,11 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async getUserByFicha(ficha: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.ficha, ficha));
     return user || undefined;
   }
 
@@ -267,6 +299,7 @@ export class DatabaseStorage implements IStorage {
       unitId: products.unitId,
       categoryId: products.categoryId,
       brandId: products.brandId,
+      erpProductCode: products.erpProductCode,
       hasWarranty: products.hasWarranty,
       warrantyMonths: products.warrantyMonths,
 
@@ -297,6 +330,7 @@ export class DatabaseStorage implements IStorage {
       description: row.description,
       productType: row.productType,
       requiresSerial: row.requiresSerial,
+      erpProductCode: row.erpProductCode,
       unitId: row.unitId,
       categoryId: row.categoryId,
       brandId: row.brandId,
@@ -919,6 +953,188 @@ export class DatabaseStorage implements IStorage {
       brand: row.brand,
       currentPrice: row.price ? row.price : null,
     }));
+  }
+
+  // Purchase Order Receipt tracking
+  async getReceiptsByOC(purchaseOrderNumber: string): Promise<PurchaseOrderReceipt[]> {
+    return await db.select().from(purchaseOrderReceipts)
+      .where(eq(purchaseOrderReceipts.purchaseOrderNumber, purchaseOrderNumber));
+  }
+
+  async getOrCreateReceipt(purchaseOrderNumber: string, line: number, ocLine: any): Promise<PurchaseOrderReceipt> {
+    const [existing] = await db.select().from(purchaseOrderReceipts)
+      .where(and(
+        eq(purchaseOrderReceipts.purchaseOrderNumber, purchaseOrderNumber),
+        eq(purchaseOrderReceipts.purchaseOrderLine, line)
+      ));
+
+    if (existing) return existing;
+
+    // Calcular precio unitario: subtotalmb / cantidad
+    const cantidad = parseFloat(ocLine.cantidad || "0");
+    const subtotal = parseFloat(ocLine.subtotalmb || "0");
+    const unitPrice = cantidad > 0 ? subtotal / cantidad : 0;
+
+    const [created] = await db.insert(purchaseOrderReceipts).values({
+      purchaseOrderNumber,
+      purchaseOrderLine: line,
+      codprod: ocLine.codprod,
+      orderedQuantity: ocLine.cantidad || "0",
+      receivedQuantity: "0",
+      unitPrice: unitPrice.toFixed(2),
+      costCenter: ocLine.codicc,
+    }).returning();
+
+    return created;
+  }
+
+  async updateReceiptQuantity(id: number, newQuantity: number, productId: number, movementId: number): Promise<PurchaseOrderReceipt> {
+    const [updated] = await db.update(purchaseOrderReceipts)
+      .set({
+        receivedQuantity: newQuantity.toString(),
+        productId,
+        lastMovementId: movementId,
+        updatedAt: new Date(),
+      })
+      .where(eq(purchaseOrderReceipts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getProductByErpCode(erpCode: string): Promise<Product | undefined> {
+    const [product] = await db.select().from(products)
+      .where(eq(products.erpProductCode, erpCode));
+    return product || undefined;
+  }
+
+  // =====================
+  // RBAC - Roles
+  // =====================
+
+  async getAllRoles(): Promise<Role[]> {
+    return await db.select().from(roles)
+      .where(eq(roles.isActive, true))
+      .orderBy(desc(roles.hierarchy));
+  }
+
+  async getRoleById(id: number): Promise<RoleWithPermissions | undefined> {
+    const [role] = await db.select().from(roles).where(eq(roles.id, id));
+    if (!role) return undefined;
+
+    const perms = await db.select({
+      id: permissions.id,
+      key: permissions.key,
+      name: permissions.name,
+      module: permissions.module,
+      category: permissions.category,
+      createdAt: permissions.createdAt,
+    })
+    .from(rolePermissions)
+    .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+    .where(eq(rolePermissions.roleId, id));
+
+    return { ...role, permissions: perms };
+  }
+
+  async getRoleByCode(code: string): Promise<Role | undefined> {
+    const [role] = await db.select().from(roles).where(eq(roles.code, code));
+    return role || undefined;
+  }
+
+  async createRole(data: Omit<InsertRole, "isSystem">): Promise<Role> {
+    const [role] = await db.insert(roles).values({
+      ...data,
+      isSystem: false,
+    }).returning();
+    return role;
+  }
+
+  async updateRole(id: number, data: { name?: string; description?: string; hierarchy?: number }): Promise<Role | undefined> {
+    const [role] = await db.update(roles)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(roles.id, id))
+      .returning();
+    return role || undefined;
+  }
+
+  async deleteRole(id: number): Promise<boolean> {
+    // Check if role is a system role
+    const [role] = await db.select().from(roles).where(eq(roles.id, id));
+    if (!role) return false;
+    if (role.isSystem) {
+      throw new Error("No se puede eliminar un rol de sistema");
+    }
+
+    // Check if any users are using this role
+    const [usersWithRole] = await db.select({ value: count() }).from(users)
+      .where(eq(users.role, role.code));
+    if (usersWithRole.value > 0) {
+      throw new Error("No se puede eliminar un rol asignado a usuarios");
+    }
+
+    // Delete associated permissions first, then the role
+    await db.delete(rolePermissions).where(eq(rolePermissions.roleId, id));
+    const result = await db.delete(roles).where(eq(roles.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // =====================
+  // RBAC - Permissions
+  // =====================
+
+  async getRolePermissions(roleId: number): Promise<string[]> {
+    const perms = await db.select({
+      key: permissions.key,
+    })
+    .from(rolePermissions)
+    .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+    .where(eq(rolePermissions.roleId, roleId));
+
+    return perms.map((p) => p.key);
+  }
+
+  async updateRolePermissions(roleId: number, permissionKeys: string[]): Promise<void> {
+    // Delete all existing permissions for this role
+    await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
+
+    if (permissionKeys.length === 0) return;
+
+    // Find permission IDs by keys
+    const perms = await db.select().from(permissions)
+      .where(inArray(permissions.key, permissionKeys));
+
+    if (perms.length === 0) return;
+
+    // Insert new role-permission associations
+    await db.insert(rolePermissions).values(
+      perms.map((p) => ({
+        roleId,
+        permissionId: p.id,
+      }))
+    );
+  }
+
+  async getAllPermissions(): Promise<Permission[]> {
+    return await db.select().from(permissions)
+      .orderBy(asc(permissions.category), asc(permissions.module));
+  }
+
+  // =====================
+  // RBAC - User-Role
+  // =====================
+
+  async getUsersCountByRole(roleCode: string): Promise<number> {
+    const [result] = await db.select({ value: count() }).from(users)
+      .where(and(eq(users.role, roleCode), eq(users.isActive, true)));
+    return result.value;
+  }
+
+  async assignUserRole(userId: number, roleCode: string): Promise<User | undefined> {
+    const [user] = await db.update(users)
+      .set({ role: roleCode, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    return user || undefined;
   }
 }
 

@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS - Sistema de Control de Inventario</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'inter': ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#2563EB',
+                        secondary: '#64748B',
+                        accent: '#10B981',
+                        surface: '#FFFFFF',
+                        background: '#F8FAFC',
+                    }
+                }
+            }
+        };
+    </script>
+</head>
+<body class="bg-background font-inter text-slate-800">
+    <!-- @COMPONENT: MainLayout -->
+    <div class="flex h-screen overflow-hidden">
+        <!-- @COMPONENT: Sidebar -->
+        <aside class="w-60 bg-surface border-r border-slate-200 flex flex-col">
+            <!-- Logo Header -->
+            <div class="p-6 border-b border-slate-200">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                        <i class="fas fa-warehouse text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-semibold text-slate-900">WMS</h1>
+                        <p class="text-xs text-slate-500">Control de Inventario</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Menu -->
+            <nav class="flex-1 px-4 py-6 space-y-2">
+                <!-- Dashboard -->
+                <div class="mb-6">
+                    <a href="#" class="flex items-center px-3 py-2 text-sm font-medium text-primary bg-blue-50 rounded-lg">
+                        <i class="fas fa-chart-pie w-5 h-5 mr-3"></i>
+                        Dashboard
+                    </a>
+                </div>
+
+                <!-- Bodegas Section -->
+                <div class="space-y-1">
+                    <div class="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        Bodegas
+                    </div>
+                    <a href="#" class="flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg">
+                        <i class="fas fa-cogs w-5 h-5 mr-3 text-slate-400"></i>
+                        Administración
+                    </a>
+                    <a href="#" class="flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg">
+                        <i class="fas fa-file-alt w-5 h-5 mr-3 text-slate-400"></i>
+                        Ficha
+                    </a>
+                </div>
+
+                <!-- Productos Section -->
+                <div class="space-y-1 pt-6">
+                    <div class="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        Productos
+                    </div>
+                    <a href="#" class="flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg">
+                        <i class="fas fa-clipboard-list w-5 h-5 mr-3 text-slate-400"></i>
+                        Ficha
+                    </a>
+                    <a href="#" class="flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg">
+                        <i class="fas fa-plus-minus w-5 h-5 mr-3 text-slate-400"></i>
+                        Alta/Baja
+                    </a>
+                </div>
+
+                <!-- Usuarios Section -->
+                <div class="space-y-1 pt-6">
+                    <div class="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        Usuarios
+                    </div>
+                    <a href="#" class="flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg">
+                        <i class="fas fa-list w-5 h-5 mr-3 text-slate-400"></i>
+                        Listado
+                    </a>
+                    <a href="#" class="flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg">
+                        <i class="fas fa-shield-alt w-5 h-5 mr-3 text-slate-400"></i>
+                        Permisos
+                    </a>
+                </div>
+            </nav>
+
+            <!-- User Profile -->
+            <div class="p-4 border-t border-slate-200">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-slate-300 rounded-full flex items-center justify-center">
+                        <i class="fas fa-user text-slate-600 text-sm"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-slate-900" data-bind="user.name">Admin Usuario</p>
+                        <p class="text-xs text-slate-500" data-bind="user.role">Administrador</p>
+                    </div>
+                    <button class="text-slate-400 hover:text-slate-600">
+                        <i class="fas fa-sign-out-alt text-sm"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+        <!-- @END_COMPONENT: Sidebar -->
+
+        <!-- @COMPONENT: MainContent -->
+        <main class="flex-1 overflow-y-auto">
+            <!-- Header -->
+            <header class="bg-surface border-b border-slate-200 px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-semibold text-slate-900">Dashboard</h2>
+                        <p class="text-sm text-slate-500 mt-1">Resumen general del inventario</p>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+                            <i class="fas fa-plus mr-2"></i>
+                            Nuevo Producto
+                        </button>
+                        <div class="relative">
+                            <button class="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-200">
+                                <i class="fas fa-bell text-sm"></i>
+                            </button>
+                            <div class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard Content -->
+            <div class="p-6 space-y-6">
+                <!-- Metrics Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <!-- @MAP: metricsData.map(metric => ( -->
+                    <div class="bg-surface rounded-xl border border-slate-200 p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-slate-600">Total Productos</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1" data-bind="metrics.totalProducts">1,247</p>
+                                <p class="text-sm text-accent mt-1">
+                                    <i class="fas fa-arrow-up text-xs mr-1"></i>
+                                    <span data-bind="metrics.productsGrowth">12%</span> vs mes anterior
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-box text-primary"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-surface rounded-xl border border-slate-200 p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-slate-600">Bodegas Activas</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1" data-bind="metrics.activeWarehouses">8</p>
+                                <p class="text-sm text-accent mt-1">
+                                    <i class="fas fa-check text-xs mr-1"></i>
+                                    <span data-bind="metrics.warehousesStatus">100%</span> operativas
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-warehouse text-accent"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-surface rounded-xl border border-slate-200 p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-slate-600">Stock Bajo</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1" data-bind="metrics.lowStock">23</p>
+                                <p class="text-sm text-red-600 mt-1">
+                                    <i class="fas fa-exclamation-triangle text-xs mr-1"></i>
+                                    <span data-bind="metrics.criticalItems">5</span> críticos
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-exclamation-triangle text-red-600"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-surface rounded-xl border border-slate-200 p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-slate-600">Valor Inventario</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1" data-bind="metrics.inventoryValue">$847,392</p>
+                                <p class="text-sm text-accent mt-1">
+                                    <i class="fas fa-arrow-up text-xs mr-1"></i>
+                                    <span data-bind="metrics.valueGrowth">8.2%</span> vs mes anterior
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-dollar-sign text-purple-600"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_MAP )) -->
+                </div>
+
+                <!-- Charts and Tables Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Recent Activity -->
+                    <div class="lg:col-span-2 bg-surface rounded-xl border border-slate-200">
+                        <div class="p-6 border-b border-slate-200">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-lg font-semibold text-slate-900">Productos Recientes</h3>
+                                <button class="text-sm text-primary hover:text-blue-700">Ver todos</button>
+                            </div>
+                        </div>
+                        <div class="p-6">
+                            <div class="overflow-x-auto">
+                                <table class="w-full">
+                                    <thead>
+                                        <tr class="text-left">
+                                            <th class="text-xs font-medium text-slate-500 uppercase tracking-wider pb-3">Producto</th>
+                                            <th class="text-xs font-medium text-slate-500 uppercase tracking-wider pb-3">Bodega</th>
+                                            <th class="text-xs font-medium text-slate-500 uppercase tracking-wider pb-3">Stock</th>
+                                            <th class="text-xs font-medium text-slate-500 uppercase tracking-wider pb-3">Estado</th>
+                                            <th class="text-xs font-medium text-slate-500 uppercase tracking-wider pb-3">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="space-y-3">
+                                        <!-- @MAP: recentProducts.map(product => ( -->
+                                        <tr class="border-t border-slate-100">
+                                            <td class="py-3">
+                                                <div class="flex items-center">
+                                                    <div class="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center mr-3">
+                                                        <i class="fas fa-cube text-slate-500 text-sm"></i>
+                                                    </div>
+                                                    <div>
+                                                        <p class="text-sm font-medium text-slate-900" data-bind="product.name">Laptop Dell XPS 13</p>
+                                                        <p class="text-xs text-slate-500" data-bind="product.sku">SKU: LAP-DEL-001</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="py-3 text-sm text-slate-600" data-bind="product.warehouse">Bodega Central</td>
+                                            <td class="py-3 text-sm text-slate-900" data-bind="product.stock">15 unidades</td>
+                                            <td class="py-3">
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                    Disponible
+                                                </span>
+                                            </td>
+                                            <td class="py-3">
+                                                <div class="flex items-center space-x-2">
+                                                    <button class="text-slate-400 hover:text-slate-600" data-event="click:editProduct">
+                                                        <i class="fas fa-edit text-xs"></i>
+                                                    </button>
+                                                    <button class="text-slate-400 hover:text-red-600" data-event="click:deleteProduct">
+                                                        <i class="fas fa-trash text-xs"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+
+                                        <tr class="border-t border-slate-100">
+                                            <td class="py-3">
+                                                <div class="flex items-center">
+                                                    <div class="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center mr-3">
+                                                        <i class="fas fa-cube text-slate-500 text-sm"></i>
+                                                    </div>
+                                                    <div>
+                                                        <p class="text-sm font-medium text-slate-900" data-bind="product.name">Monitor Samsung 24"</p>
+                                                        <p class="text-xs text-slate-500" data-bind="product.sku">SKU: MON-SAM-024</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="py-3 text-sm text-slate-600" data-bind="product.warehouse">Bodega Norte</td>
+                                            <td class="py-3 text-sm text-slate-900" data-bind="product.stock">3 unidades</td>
+                                            <td class="py-3">
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                                    Stock Bajo
+                                                </span>
+                                            </td>
+                                            <td class="py-3">
+                                                <div class="flex items-center space-x-2">
+                                                    <button class="text-slate-400 hover:text-slate-600" data-event="click:editProduct">
+                                                        <i class="fas fa-edit text-xs"></i>
+                                                    </button>
+                                                    <button class="text-slate-400 hover:text-red-600" data-event="click:deleteProduct">
+                                                        <i class="fas fa-trash text-xs"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+
+                                        <tr class="border-t border-slate-100">
+                                            <td class="py-3">
+                                                <div class="flex items-center">
+                                                    <div class="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center mr-3">
+                                                        <i class="fas fa-cube text-slate-500 text-sm"></i>
+                                                    </div>
+                                                    <div>
+                                                        <p class="text-sm font-medium text-slate-900" data-bind="product.name">Teclado Mecánico RGB</p>
+                                                        <p class="text-xs text-slate-500" data-bind="product.sku">SKU: KEY-MEC-RGB001</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="py-3 text-sm text-slate-600" data-bind="product.warehouse">Bodega Sur</td>
+                                            <td class="py-3 text-sm text-slate-900" data-bind="product.stock">28 unidades</td>
+                                            <td class="py-3">
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                    Disponible
+                                                </span>
+                                            </td>
+                                            <td class="py-3">
+                                                <div class="flex items-center space-x-2">
+                                                    <button class="text-slate-400 hover:text-slate-600" data-event="click:editProduct">
+                                                        <i class="fas fa-edit text-xs"></i>
+                                                    </button>
+                                                    <button class="text-slate-400 hover:text-red-600" data-event="click:deleteProduct">
+                                                        <i class="fas fa-trash text-xs"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <!-- @END_MAP )) -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions & Alerts -->
+                    <div class="space-y-6">
+                        <!-- Quick Actions -->
+                        <div class="bg-surface rounded-xl border border-slate-200">
+                            <div class="p-6 border-b border-slate-200">
+                                <h3 class="text-lg font-semibold text-slate-900">Acciones Rápidas</h3>
+                            </div>
+                            <div class="p-6 space-y-3">
+                                <button class="w-full flex items-center px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200" data-event="click:addProduct">
+                                    <i class="fas fa-plus w-5 h-5 mr-3 text-primary"></i>
+                                    Agregar Producto
+                                </button>
+                                <button class="w-full flex items-center px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200" data-event="click:addWarehouse">
+                                    <i class="fas fa-warehouse w-5 h-5 mr-3 text-accent"></i>
+                                    Nueva Bodega
+                                </button>
+                                <button class="w-full flex items-center px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200" data-event="click:generateReport">
+                                    <i class="fas fa-chart-bar w-5 h-5 mr-3 text-purple-600"></i>
+                                    Generar Reporte
+                                </button>
+                                <button class="w-full flex items-center px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200" data-event="click:exportData">
+                                    <i class="fas fa-download w-5 h-5 mr-3 text-secondary"></i>
+                                    Exportar Datos
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Alerts -->
+                        <div class="bg-surface rounded-xl border border-slate-200">
+                            <div class="p-6 border-b border-slate-200">
+                                <h3 class="text-lg font-semibold text-slate-900">Alertas del Sistema</h3>
+                            </div>
+                            <div class="p-6 space-y-4">
+                                <!-- @MAP: systemAlerts.map(alert => ( -->
+                                <div class="flex items-start space-x-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                    <div class="w-5 h-5 text-red-600 mt-0.5">
+                                        <i class="fas fa-exclamation-triangle text-sm"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-red-800" data-bind="alert.title">Stock Crítico</p>
+                                        <p class="text-sm text-red-600 mt-1" data-bind="alert.message">5 productos con stock por debajo del mínimo</p>
+                                        <p class="text-xs text-red-500 mt-1" data-bind="alert.time">Hace 2 horas</p>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-start space-x-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                    <div class="w-5 h-5 text-yellow-600 mt-0.5">
+                                        <i class="fas fa-info-circle text-sm"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-yellow-800" data-bind="alert.title">Mantenimiento Programado</p>
+                                        <p class="text-sm text-yellow-600 mt-1" data-bind="alert.message">Base de datos programada para mantenimiento</p>
+                                        <p class="text-xs text-yellow-500 mt-1" data-bind="alert.time">Mañana 02:00 AM</p>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-start space-x-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                    <div class="w-5 h-5 text-green-600 mt-0.5">
+                                        <i class="fas fa-check-circle text-sm"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-green-800" data-bind="alert.title">Sincronización Completa</p>
+                                        <p class="text-sm text-green-600 mt-1" data-bind="alert.message">Todos los sistemas funcionando correctamente</p>
+                                        <p class="text-xs text-green-500 mt-1" data-bind="alert.time">Hace 30 minutos</p>
+                                    </div>
+                                </div>
+                                <!-- @END_MAP )) -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <!-- @END_COMPONENT: MainContent -->
+    </div>
+    <!-- @END_COMPONENT: MainLayout -->
+
+    <!-- @COMPONENT: Modal - New Product Form -->
+    <div id="productModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden" data-mock="true">
+        <div class="bg-surface rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div class="p-6 border-b border-slate-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-slate-900">Nuevo Producto</h3>
+                    <button class="text-slate-400 hover:text-slate-600" data-event="click:closeModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <form class="p-6 space-y-4" data-implementation="Should validate form before submission">
+                <!-- @STATE: formData:object = {} -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Nombre del Producto</label>
+                    <input type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Ej. Laptop Dell XPS 13" data-bind="formData.name">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">SKU</label>
+                    <input type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Ej. LAP-DEL-001" data-bind="formData.sku">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Bodega</label>
+                    <select class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" data-bind="formData.warehouse">
+                        <option value="">Seleccionar bodega</option>
+                        <option value="central" data-mock="true">Bodega Central</option>
+                        <option value="norte" data-mock="true">Bodega Norte</option>
+                        <option value="sur" data-mock="true">Bodega Sur</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Stock Inicial</label>
+                    <input type="number" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="0" min="0" data-bind="formData.initialStock">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Stock Mínimo</label>
+                    <input type="number" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="0" min="0" data-bind="formData.minStock">
+                </div>
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50" data-event="click:closeModal">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700" data-event="click:handleSubmit">
+                        Crear Producto
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: Modal -->
+
+    <script>
+        // TODO: Implement business logic, API calls, or state management
+        (function() {
+            // Modal functionality
+            const modalTriggers = document.querySelectorAll('[data-event*="Modal"]');
+            const modals = document.querySelectorAll('[id*="Modal"]');
+            
+            // Basic modal show/hide functionality for demo purposes
+            modalTriggers.forEach(trigger => {
+                trigger.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const action = this.getAttribute('data-event');
+                    if (action.includes('close')) {
+                        modals.forEach(modal => modal.classList.add('hidden'));
+                    } else {
+                        document.getElementById('productModal').classList.remove('hidden');
+                    }
+                });
+            });
+
+            // Close modal on backdrop click
+            modals.forEach(modal => {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        this.classList.add('hidden');
+                    }
+                });
+            });
+
+            // Table row interactions
+            const tableButtons = document.querySelectorAll('[data-event*="Product"]');
+            tableButtons.forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const action = this.getAttribute('data-event');
+                    console.log('Action triggered:', action);
+                    // TODO: Implement actual CRUD operations
+                });
+            });
+
+            // Quick action buttons
+            const quickActions = document.querySelectorAll('[data-event*="add"], [data-event*="generate"], [data-event*="export"]');
+            quickActions.forEach(action => {
+                action.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const actionType = this.getAttribute('data-event');
+                    console.log('Quick action:', actionType);
+                    // TODO: Implement action handlers
+                });
+            });
+        })();
+    </script>
+</body>
+</html>

@@ -1,57 +1,38 @@
 import { Link, useLocation } from "wouter";
-import { 
-  ChartPie, 
-  Settings, 
-  FileText, 
-  ClipboardList, 
-  PlusCircle, 
-  Users, 
-  Shield, 
-  Warehouse, 
+import {
+  ChartPie,
+  Settings,
+  FileText,
+  PlusCircle,
+  Users,
+  Shield,
+  Warehouse,
   User,
   LogOut,
   Building2,
   Package,
   ArrowUpCircle,
   RefreshCcw,
-  Menu
+  Menu,
+  ShieldAlert
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 
-const navigation = [
-  { name: "Dashboard", href: "/", icon: ChartPie },
-];
-
-const warehouseNavigation = [
-  { name: "Centros de Costos", href: "/cost-centers", icon: Building2 },
-  { name: "Administración", href: "/warehouses", icon: Settings },
-];
-
-const productNavigation = [
-  { name: "Gestión", href: "/products", icon: Package },
-  { name: "Alta/Baja", href: "/products/movements", icon: PlusCircle },
-];
-
-const inventoryNavigation = [
-  { name: "Ingreso de Productos", href: "/inventory/stock-entry", icon: ArrowUpCircle },
-];
-
-const ordersNavigation = [
-  { name: "Ingreso Orden de Compra", href: "/orders/purchase-order", icon: FileText },
-  { name: "Órdenes de Traspaso", href: "/orders/transfer-orders", icon: RefreshCcw },
-];
-
-const userNavigation = [
-  { name: "Gestión de Usuarios", href: "/users", icon: Users },
-];
+interface NavItem {
+  name: string;
+  href: string;
+  icon: any;
+}
 
 // Contenido del sidebar (compartido entre desktop y móvil)
 function SidebarContent() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
+  const { can, canAny, roleName, isLoading: permissionsLoading } = usePermissions();
 
   const isActive = (href: string) => {
     if (href === "/") {
@@ -62,6 +43,61 @@ function SidebarContent() {
 
   const handleLogout = async () => {
     await logout();
+  };
+
+  // Determinar si el usuario no tiene permisos
+  const hasNoPermissions = !permissionsLoading && !canAny([
+    "dashboard.view", "warehouses.view", "products.view", "inventory.view",
+    "orders.view_purchase", "orders.view_transfers", "users.view", "roles.view"
+  ]);
+
+  // Construir navegacion filtrada por permisos
+  const dashboardNav: NavItem[] = can("dashboard.view") ? [
+    { name: "Dashboard", href: "/", icon: ChartPie },
+  ] : [];
+
+  const warehouseNav: NavItem[] = [];
+  if (can("cost_centers.view")) warehouseNav.push({ name: "Centros de Costos", href: "/cost-centers", icon: Building2 });
+  if (can("warehouses.view")) warehouseNav.push({ name: "Administración", href: "/warehouses", icon: Settings });
+
+  const productNav: NavItem[] = [];
+  if (can("products.view")) productNav.push({ name: "Gestión", href: "/products", icon: Package });
+  if (can("products.view")) productNav.push({ name: "Alta/Baja", href: "/products/movements", icon: PlusCircle });
+
+  const inventoryNav: NavItem[] = [];
+  if (can("inventory.entry")) inventoryNav.push({ name: "Ingreso de Productos", href: "/inventory/stock-entry", icon: ArrowUpCircle });
+
+  const ordersNav: NavItem[] = [];
+  if (canAny(["orders.view_purchase", "orders.entry_oc"])) ordersNav.push({ name: "Ingreso Orden de Compra", href: "/orders/purchase-order", icon: FileText });
+  if (canAny(["orders.view_transfers", "orders.create_transfers"])) ordersNav.push({ name: "Órdenes de Traspaso", href: "/orders/transfer-orders", icon: RefreshCcw });
+
+  const adminNav: NavItem[] = [];
+  if (canAny(["users.view", "users.manage"])) adminNav.push({ name: "Gestión de Usuarios", href: "/users", icon: Users });
+  if (canAny(["roles.view", "roles.manage"])) adminNav.push({ name: "Gestión de Roles", href: "/roles", icon: Shield });
+
+  const renderSection = (title: string, items: NavItem[], extraPt = true) => {
+    if (items.length === 0) return null;
+    return (
+      <div className={cn("space-y-1", extraPt && "pt-6")}>
+        <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          {title}
+        </div>
+        {items.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link key={item.name} href={item.href}>
+              <div className={cn(
+                "sidebar-item",
+                isActive(item.href) && "sidebar-item-active"
+              )}>
+                <Icon className="w-5 h-5 mr-3" />
+                {item.name}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -81,128 +117,43 @@ function SidebarContent() {
 
       {/* Navigation Menu */}
       <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-        {/* Dashboard */}
-        <div className="mb-6">
-          {navigation.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link key={item.name} href={item.href}>
-                <div className={cn(
-                  "sidebar-item",
-                  isActive(item.href) && "sidebar-item-active"
-                )}>
-                  <Icon className="w-5 h-5 mr-3" />
-                  {item.name}
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-
-        {/* Bodegas Section */}
-        <div className="space-y-1">
-          <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Bodegas
+        {hasNoPermissions ? (
+          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+            <ShieldAlert className="w-10 h-10 text-muted-foreground mb-3" />
+            <p className="text-sm font-medium text-muted-foreground">Sin permisos asignados</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Contacte al administrador para obtener acceso al sistema.
+            </p>
           </div>
-          {warehouseNavigation.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link key={item.name} href={item.href}>
-                <div className={cn(
-                  "sidebar-item",
-                  isActive(item.href) && "sidebar-item-active"
-                )}>
-                  <Icon className="w-5 h-5 mr-3" />
-                  {item.name}
-                </div>
-              </Link>
-            );
-          })}
-        </div>
+        ) : (
+          <>
+            {/* Dashboard */}
+            {dashboardNav.length > 0 && (
+              <div className="mb-6">
+                {dashboardNav.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link key={item.name} href={item.href}>
+                      <div className={cn(
+                        "sidebar-item",
+                        isActive(item.href) && "sidebar-item-active"
+                      )}>
+                        <Icon className="w-5 h-5 mr-3" />
+                        {item.name}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
 
-        {/* Productos Section */}
-        <div className="space-y-1 pt-6">
-          <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Productos
-          </div>
-          {productNavigation.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link key={item.name} href={item.href}>
-                <div className={cn(
-                  "sidebar-item",
-                  isActive(item.href) && "sidebar-item-active"
-                )}>
-                  <Icon className="w-5 h-5 mr-3" />
-                  {item.name}
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-
-        {/* Inventario Section */}
-        <div className="space-y-1 pt-6">
-          <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Inventario
-          </div>
-          {inventoryNavigation.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link key={item.name} href={item.href}>
-                <div className={cn(
-                  "sidebar-item",
-                  isActive(item.href) && "sidebar-item-active"
-                )}>
-                  <Icon className="w-5 h-5 mr-3" />
-                  {item.name}
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-
-        {/* Órdenes Section */}
-        <div className="space-y-1 pt-6">
-          <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Órdenes
-          </div>
-          {ordersNavigation.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link key={item.name} href={item.href}>
-                <div className={cn(
-                  "sidebar-item",
-                  isActive(item.href) && "sidebar-item-active"
-                )}>
-                  <Icon className="w-5 h-5 mr-3" />
-                  {item.name}
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-
-        {/* Usuarios Section */}
-        <div className="space-y-1 pt-6">
-          <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Usuarios
-          </div>
-          {userNavigation.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link key={item.name} href={item.href}>
-                <div className={cn(
-                  "sidebar-item",
-                  isActive(item.href) && "sidebar-item-active"
-                )}>
-                  <Icon className="w-5 h-5 mr-3" />
-                  {item.name}
-                </div>
-              </Link>
-            );
-          })}
-        </div>
+            {renderSection("Bodegas", warehouseNav, false)}
+            {renderSection("Productos", productNav)}
+            {renderSection("Inventario", inventoryNav)}
+            {renderSection("Órdenes", ordersNav)}
+            {renderSection("Administración", adminNav)}
+          </>
+        )}
       </nav>
 
       {/* User Profile */}
@@ -216,12 +167,10 @@ function SidebarContent() {
               {user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || 'Usuario'}
             </p>
             <p className="text-xs text-muted-foreground">
-              {user?.role === 'admin' ? 'Administrador' : 
-               user?.role === 'project_manager' ? 'Jefe de Proyecto' :
-               user?.role === 'warehouse_operator' ? 'Operador' : 'Usuario'}
+              {roleName || 'Sin rol'}
             </p>
           </div>
-          <button 
+          <button
             onClick={handleLogout}
             className="text-muted-foreground hover:text-sidebar-foreground transition-colors"
             title="Cerrar sesión"

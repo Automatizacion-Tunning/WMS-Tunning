@@ -1,230 +1,230 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Package, TrendingUp, AlertTriangle, Building2, Scan } from "lucide-react";
-import SimpleProductEntryForm from "@/components/forms/SimpleProductEntryForm";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Plus, Package, ArrowUpCircle, Scan, Info, FileText } from "lucide-react";
+import ProductEntryForm from "@/components/forms/ProductEntryForm";
+import type { InventoryMovementWithDetails } from "@shared/schema";
 
 export default function StockEntry() {
-  const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+
+  // Obtener movimientos de inventario recientes (ingresos)
+  const { data: movements = [], isLoading } = useQuery<InventoryMovementWithDetails[]>({
+    queryKey: ["/api/inventory-movements"],
+  });
+
+  // Filtrar solo ingresos (movementType === 'in')
+  const entries = movements.filter(m => m.movementType === "in");
+
+  const formatDate = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleDateString("es-CL", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const formatMoney = (val: string | null) => {
+    if (!val) return "-";
+    const num = parseFloat(val);
+    return "$" + num.toLocaleString("es-CL", { minimumFractionDigits: 0 });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-96" />
+          <Card>
+            <CardContent className="p-6">
+              <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header con botón */}
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Ingreso de Productos</h1>
           <p className="text-muted-foreground">
-            Gestiona el ingreso de productos por centro de costo
+            Gestión de ingreso de productos por centro de costo
           </p>
         </div>
-        
-        <Dialog open={isEntryModalOpen} onOpenChange={setIsEntryModalOpen}>
+
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button size="lg">
               <Plus className="w-4 h-4 mr-2" />
-              Ingresar Producto
+              Nuevo Ingreso
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Ingreso de Producto</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <Package className="w-5 h-5" />
+                Ingreso de Producto
+              </DialogTitle>
+              <DialogDescription>
+                Ingresa un producto al inventario. Selecciona el centro de costo,
+                el producto y la cantidad a ingresar. Puedes escanear el código
+                de barras con el botón SCANNER para buscar el producto automáticamente.
+              </DialogDescription>
             </DialogHeader>
-            <SimpleProductEntryForm onSuccess={() => setIsEntryModalOpen(false)} />
+            <ProductEntryForm
+              onSuccess={() => setIsCreateDialogOpen(false)}
+              onCancel={() => setIsCreateDialogOpen(false)}
+            />
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Centro de Costo
-            </CardTitle>
-            <Building2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">Requerido</div>
-            <p className="text-xs text-muted-foreground">
-              Se asigna automáticamente a bodega principal del centro
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Precio Aplicado
-            </CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">Por Ingreso</div>
-            <p className="text-xs text-muted-foreground">
-              Se captura precio específico para cada ingreso
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Validación de Series
-            </CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-amber-600">Obligatoria</div>
-            <p className="text-xs text-muted-foreground">
-              Para productos que requieren número de serie
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Instrucciones de Uso</CardTitle>
-          <CardDescription>
-            Sigue estos pasos para ingresar stock correctamente
-          </CardDescription>
+      {/* Guía de uso */}
+      <Card className="border-blue-200 bg-blue-50/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-blue-900">
+            <Info className="w-5 h-5 text-blue-600" />
+            ¿Cómo funciona el ingreso de productos?
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-3">
-              <h4 className="font-medium text-green-700">✓ Proceso Correcto</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>• Selecciona o crea un centro de costo</li>
-                <li>• Selecciona el producto desde el catálogo</li>
-                <li>• Especifica la cantidad a ingresar</li>
-                <li>• Ingresa el precio específico para este movimiento</li>
-                <li>• Agrega números de serie si es requerido</li>
-                <li>• El sistema crea bodegas automáticamente si no existen</li>
-              </ul>
+        <CardContent className="pt-0">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="flex items-start gap-3 p-3 bg-white/60 rounded-lg">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+                <ArrowUpCircle className="w-4 h-4 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-blue-900">Nuevo Ingreso</p>
+                <p className="text-xs text-blue-700">Haz clic en el botón para abrir el formulario de ingreso.</p>
+              </div>
             </div>
-            
-            <div className="space-y-3">
-              <h4 className="font-medium text-red-700">✗ Puntos Importantes</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>• El centro de costo es obligatorio</li>
-                <li>• Se crean bodegas automáticamente si no existen</li>
-                <li>• Los números de serie deben ser únicos</li>
-                <li>• La cantidad debe ser mayor a 0</li>
-                <li>• El precio es obligatorio para cada ingreso</li>
-              </ul>
+            <div className="flex items-start gap-3 p-3 bg-white/60 rounded-lg">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+                <Scan className="w-4 h-4 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-blue-900">Scanner</p>
+                <p className="text-xs text-blue-700">Usa el botón SCANNER para buscar productos por código de barras.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-white/60 rounded-lg">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+                <Package className="w-4 h-4 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-blue-900">Centro de Costo</p>
+                <p className="text-xs text-blue-700">Selecciona el centro de costo destino y el producto a ingresar.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-white/60 rounded-lg">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+                <FileText className="w-4 h-4 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-blue-900">Bodega Principal</p>
+                <p className="text-xs text-blue-700">El producto se ingresa automáticamente a la bodega principal del CC.</p>
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center gap-2">
-          <Scan className="w-5 h-5 text-blue-600" />
-          <div>
-            <CardTitle>¿Cómo usar el botón "📱 Código"?</CardTitle>
-            <CardDescription>
-              Instructivo paso a paso del escáner de códigos de barras
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-              <h4 className="font-medium text-purple-800 mb-3 flex items-center gap-2">
-                <span className="bg-purple-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">1</span>
-                Presiona el botón "📱 Código"
-              </h4>
-              <p className="text-sm text-purple-700">
-                Al hacer clic, se abrirá la cámara de tu dispositivo para escanear códigos de barras.
-                Asegúrate de permitir el acceso a la cámara cuando el navegador lo solicite.
-              </p>
-            </div>
-
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h4 className="font-medium text-blue-800 mb-3 flex items-center gap-2">
-                <span className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">2</span>
-                Escanea el código de barras del producto
-              </h4>
-              <p className="text-sm text-blue-700 mb-2">
-                Apunta la cámara hacia el código de barras y espera a que se detecte automáticamente.
-                El sistema buscará el producto en la base de datos.
-              </p>
-            </div>
-
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <h4 className="font-medium text-green-800 mb-3 flex items-center gap-2">
-                <span className="bg-green-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">3</span>
-                Si el producto existe
-              </h4>
-              <p className="text-sm text-green-700">
-                El producto se seleccionará automáticamente en el formulario y podrás ver toda su información 
-                (SKU, tipo, si requiere serie, etc.). Solo completa la cantidad y precio para continuar.
-              </p>
-            </div>
-
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-              <h4 className="font-medium text-amber-800 mb-3 flex items-center gap-2">
-                <span className="bg-amber-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">4</span>
-                Si el producto NO existe
-              </h4>
-              <p className="text-sm text-amber-700 mb-2">
-                Aparecerá un mensaje con dos opciones:
-              </p>
-              <ul className="space-y-2 text-sm text-amber-700 ml-4">
-                <li><strong>• Crear Producto Nuevo:</strong> Se abrirá un formulario completo para registrar el nuevo producto con el código escaneado.</li>
-                <li><strong>• Asociar a Producto Existente:</strong> Si el producto ya existe pero no tiene código de barras, podrás buscarlo y asociarle el código escaneado.</li>
-              </ul>
-            </div>
-
-            <div className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
-              <h4 className="font-medium text-gray-800 mb-2">💡 Consejos útiles</h4>
-              <ul className="space-y-1 text-sm text-gray-700">
-                <li>• Mantén buena iluminación para un escaneo más rápido</li>
-                <li>• Si la cámara no abre, verifica los permisos del navegador</li>
-                <li>• Puedes cancelar el escaneo en cualquier momento presionando "Cancelar"</li>
-                <li>• Los códigos escaneados se guardan automáticamente en el producto</li>
-              </ul>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
+      {/* Tabla de ingresos recientes */}
       <Card>
         <CardHeader>
-          <CardTitle>Política de Bodegas</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <ArrowUpCircle className="w-5 h-5" />
+            Ingresos Recientes
+          </CardTitle>
           <CardDescription>
-            Comprende el flujo de trabajo de gestión de inventario
+            Historial de los últimos ingresos de productos al inventario
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h4 className="font-medium text-blue-800 mb-2">1. Ingreso Inicial</h4>
-              <p className="text-sm text-blue-700 mb-2">
-                Al ingresar un producto nuevo, debes seleccionar un <strong>Centro de Costo</strong> (PRINCIPAL, UM2, PLATAFORMA, PEM o INTEGRADOR).
+          {entries.length === 0 ? (
+            <div className="text-center py-12">
+              <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium mb-2">No hay ingresos registrados</h3>
+              <p className="text-muted-foreground mb-4">
+                Haz clic en "Nuevo Ingreso" para registrar el primer ingreso de producto.
               </p>
-              <p className="text-sm text-blue-700">
-                El producto se guardará automáticamente en la <strong>Bodega Principal</strong> de ese centro. 
-                Si es la primera vez que usas ese centro de costo, el sistema creará automáticamente la bodega principal 
-                y sus 4 sub-bodegas (UM2, Plataforma, PEM, Integrador).
-              </p>
+              <Button onClick={() => setIsCreateDialogOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Nuevo Ingreso
+              </Button>
             </div>
-            
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <h4 className="font-medium text-green-800 mb-2">2. Traspaso Entre Bodegas</h4>
-              <p className="text-sm text-green-700">
-                Para mover stock entre bodegas, debes crear una <strong>Orden de Traspaso</strong> que requiere 
-                aprobación del Jefe de Proyectos del centro de costos.
-              </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Producto</TableHead>
+                    <TableHead>Bodega / CC</TableHead>
+                    <TableHead className="text-right">Cantidad</TableHead>
+                    <TableHead className="text-right">Precio Unit.</TableHead>
+                    <TableHead>Razón</TableHead>
+                    <TableHead>Usuario</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {entries.map((entry) => (
+                    <TableRow key={entry.id}>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {formatDate(entry.createdAt as string)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{entry.product?.name || "-"}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {entry.product?.sku || "Sin SKU"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">{entry.warehouse?.name || "-"}</div>
+                        <Badge variant="outline" className="text-xs font-mono">
+                          {entry.warehouse?.costCenter || "-"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-semibold">
+                        {entry.quantity}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {formatMoney(entry.appliedPrice)}
+                      </TableCell>
+                      <TableCell className="max-w-[200px]">
+                        <div className="truncate text-sm text-muted-foreground" title={entry.reason || ""}>
+                          {entry.reason || "-"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {entry.user?.firstName || entry.user?.username || "-"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-            
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-              <h4 className="font-medium text-amber-800 mb-2">3. Control de Precios</h4>
-              <p className="text-sm text-amber-700">
-                Los precios se aplican automáticamente según el mes actual. Cada movimiento queda registrado 
-                con el precio vigente en ese momento para mantener la trazabilidad.
-              </p>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1,5 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
@@ -10,35 +12,49 @@ if (isProduction && !process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET must be set in production");
 }
 
-// Configurar sesiones
+// --- Headers de seguridad ---
+app.use(helmet({
+  contentSecurityPolicy: isProduction ? undefined : false, // Desactivar CSP en desarrollo para Vite HMR
+}));
+
+// --- Rate limiting global ---
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests, please try again later" },
+});
+app.use("/api/", apiLimiter);
+
+// --- Rate limiting estricto para login ---
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 10, // Máximo 10 intentos de login por IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many login attempts, please try again after 15 minutes" },
+});
+app.use("/api/auth/login", loginLimiter);
+
 // Permite a Express conocer el esquema original cuando está detrás de un proxy
 app.set("trust proxy", 1);
 
-const secureCookie: boolean | "auto" =
-  process.env.COOKIE_SECURE !== undefined
-    ? process.env.COOKIE_SECURE === "true"
-    : "auto";
-
-const sameSite = process.env.COOKIE_SAME_SITE as
-  | boolean
-  | "lax"
-  | "strict"
-  | "none"
-  | undefined;
-
+// --- Configurar sesiones ---
 app.use(session({
   secret: process.env.SESSION_SECRET || "wms-secret-key-change-in-production",
   resave: false,
   saveUninitialized: false,
+  name: 'wms.sid', // Nombre personalizado (no revelar que usamos express-session)
   cookie: {
-    secure: secureCookie,
+    secure: isProduction,
     httpOnly: true,
-    ...(sameSite ? { sameSite } : {}),
+    sameSite: "lax",
     maxAge: 24 * 60 * 60 * 1000 // 24 horas
   }
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' })); // Limitar tamaño de body
 app.use(express.urlencoded({ extended: false }));
 
 app.use((req, res, next) => {
@@ -99,7 +115,6 @@ app.use((req, res, next) => {
   server.listen({
     port,
     host: "0.0.0.0",
-    reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
   });

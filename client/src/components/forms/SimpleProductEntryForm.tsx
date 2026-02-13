@@ -9,16 +9,48 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { productEntrySchema, type Product } from "@shared/schema";
 import { z } from "zod";
-import { Plus, X, Package, Building2, Scan, Info } from "lucide-react";
+import {
+  Plus, X, Package, Building2, Scan, Search, FileText,
+  Check, Clock, AlertCircle, ChevronDown, ChevronUp, XCircle,
+} from "lucide-react";
 import { useBarcodeFlow } from "@/hooks/useBarcodeFlow";
-import BarcodeScanner from "@/components/ui/barcode-scanner-native";
+import BarcodeScannerNative from "@/components/ui/barcode-scanner-native";
 import ProductNotFoundModal from "@/components/modals/ProductNotFoundModal";
 import AssociateProductModal from "@/components/modals/AssociateProductModal";
 import NewProductWithBarcodeForm from "@/components/forms/NewProductWithBarcodeForm";
 
 type ProductEntryData = z.infer<typeof productEntrySchema>;
+
+interface OcSearchResult {
+  numoc: string;
+  nomaux: string | null;
+  fechaoc: string | null;
+  lineCount: number;
+}
+
+interface EnrichedOcLine {
+  numoc: string;
+  numlinea: number;
+  codprod: string | null;
+  desprod: string | null;
+  desprod2: string | null;
+  cantidad: string | null;
+  recibido: string | null;
+  codicc: string | null;
+  subtotalmb: string | null;
+  nomaux: string | null;
+  fechaoc: string | null;
+  fechaent: string | null;
+  localReceivedQuantity: number;
+  pendingQuantity: number;
+  localProductId: number | null;
+  matchedProductName: string | null;
+  calculatedUnitPrice: number;
+  isFullyReceived: boolean;
+}
 
 interface SimpleProductEntryFormProps {
   onSuccess?: () => void;
@@ -31,12 +63,35 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
   const [serialNumbers, setSerialNumbers] = useState<string[]>([]);
   const [serialInput, setSerialInput] = useState("");
 
+  // OC state
+  const [ocExpanded, setOcExpanded] = useState(false);
+  const [ocSearch, setOcSearch] = useState("");
+  const [debouncedOcSearch, setDebouncedOcSearch] = useState("");
+  const [selectedOC, setSelectedOC] = useState<string>("");
+  const [selectedOCInfo, setSelectedOCInfo] = useState<OcSearchResult | null>(null);
+  const [selectedLine, setSelectedLine] = useState<EnrichedOcLine | null>(null);
+  const [showOcResults, setShowOcResults] = useState(false);
+  const [ocCostCenter, setOcCostCenter] = useState("");
+
+  // Hook para manejo de códigos de barras
+  const barcodeFlow = useBarcodeFlow();
+
   const { data: products = [] } = useQuery<Product[]>({
     queryKey: ["/api/products"],
   });
 
-  // Centros de costo predefinidos
-  const costCenters = ["CC252130", "CC252131", "CC252132", "CC252133"];
+  // Obtener centros de costo dinámicamente
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ["/api/warehouses"],
+  });
+
+  // Extraer centros de costo únicos de las bodegas
+  const costCenters = (warehouses as any[])
+    .map((w: any) => w.costCenter)
+    .filter(Boolean)
+    .reduce((unique: string[], center: string) => {
+      return unique.includes(center) ? unique : [...unique, center];
+    }, []);
 
   const form = useForm<ProductEntryData>({
     resolver: zodResolver(productEntrySchema),
@@ -52,19 +107,115 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
   });
 
   const selectedProduct = products.find(p => p.id === form.watch("productId"));
+  const isOcMode = !!selectedOC;
 
-  // Barcode flow hook
-  const barcodeFlow = useBarcodeFlow();
+  // ========================
+  // OC Search Logic
+  // ========================
 
-  // Effect to auto-select product when found via barcode
+  // Debounce OC search
   useEffect(() => {
-    if (barcodeFlow.state === "product-found" && barcodeFlow.product) {
-      form.setValue("productId", barcodeFlow.product.id);
-      barcodeFlow.reset();
-    }
-  }, [barcodeFlow.state, barcodeFlow.product, form]);
+    const timer = setTimeout(() => {
+      setDebouncedOcSearch(ocSearch);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [ocSearch]);
 
-  // Mutación para el ingreso de producto
+  // Search OCs
+  const { data: ocSearchResults = [], isFetching: isSearchingOC } = useQuery<OcSearchResult[]>({
+    queryKey: ["/api/ordenes-compra/search", debouncedOcSearch],
+    queryFn: () => apiRequest(`/api/ordenes-compra/search?q=${encodeURIComponent(debouncedOcSearch)}`),
+    enabled: debouncedOcSearch.length >= 2 && !selectedOC,
+  });
+
+  // Get cost centers for selected OC
+  const { data: ocCostCenters = [] } = useQuery<string[]>({
+    queryKey: ["/api/ordenes-compra", selectedOC, "cost-centers"],
+    queryFn: () => apiRequest(`/api/ordenes-compra/${encodeURIComponent(selectedOC)}/cost-centers`),
+    enabled: !!selectedOC,
+  });
+
+  // Get lines for selected OC + CC
+  const { data: ocLines = [], isFetching: isLoadingLines } = useQuery<EnrichedOcLine[]>({
+    queryKey: ["/api/ordenes-compra", selectedOC, "lines", ocCostCenter],
+    queryFn: () => {
+      const url = ocCostCenter
+        ? `/api/ordenes-compra/${encodeURIComponent(selectedOC)}/lines?cc=${encodeURIComponent(ocCostCenter)}`
+        : `/api/ordenes-compra/${encodeURIComponent(selectedOC)}/lines`;
+      return apiRequest(url);
+    },
+    enabled: !!selectedOC && !!ocCostCenter,
+  });
+
+  // Auto-select CC when OC has only one
+  useEffect(() => {
+    if (selectedOC && ocCostCenters.length === 1 && !ocCostCenter) {
+      setOcCostCenter(ocCostCenters[0]);
+      form.setValue("costCenter", ocCostCenters[0]);
+    }
+  }, [selectedOC, ocCostCenters, ocCostCenter, form]);
+
+  // OC Handlers
+  const handleSelectOC = (oc: OcSearchResult) => {
+    setSelectedOC(oc.numoc);
+    setSelectedOCInfo(oc);
+    setOcSearch(oc.numoc);
+    setShowOcResults(false);
+    setOcCostCenter("");
+    setSelectedLine(null);
+    form.setValue("costCenter", "");
+  };
+
+  const handleClearOC = () => {
+    setSelectedOC("");
+    setSelectedOCInfo(null);
+    setOcSearch("");
+    setDebouncedOcSearch("");
+    setShowOcResults(false);
+    setSelectedLine(null);
+    setOcCostCenter("");
+    form.setValue("costCenter", "");
+    form.setValue("productId", 0);
+    form.setValue("quantity", 1);
+    form.setValue("price", 0);
+    form.setValue("reason", "");
+  };
+
+  const handleSelectOcCostCenter = (cc: string) => {
+    setOcCostCenter(cc);
+    form.setValue("costCenter", cc);
+    setSelectedLine(null);
+  };
+
+  const handleSelectLine = (line: EnrichedOcLine) => {
+    if (line.isFullyReceived) return;
+    setSelectedLine(line);
+
+    // Auto-fill form fields from OC line
+    if (line.localProductId) {
+      form.setValue("productId", line.localProductId);
+    } else {
+      form.setValue("productId", 0);
+    }
+    form.setValue("quantity", Math.min(1, line.pendingQuantity));
+    form.setValue("price", line.calculatedUnitPrice);
+    form.setValue("reason", `Recepcion OC ${line.numoc} linea ${line.numlinea}`);
+    setSerialNumbers([]);
+  };
+
+  const handleDeselectLine = () => {
+    setSelectedLine(null);
+    form.setValue("productId", 0);
+    form.setValue("quantity", 1);
+    form.setValue("price", 0);
+    form.setValue("reason", "");
+    setSerialNumbers([]);
+  };
+
+  // ========================
+  // Mutations
+  // ========================
+
   const entryMutation = useMutation({
     mutationFn: async (data: ProductEntryData) => {
       const response = await fetch("/api/product-entry", {
@@ -73,7 +224,8 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
         body: JSON.stringify(data),
       });
       if (!response.ok) {
-        throw new Error("Error al ingresar producto");
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || "Error al ingresar producto");
       }
       return response.json();
     },
@@ -84,6 +236,9 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
       });
       queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/metrics"] });
+      form.reset();
+      setSerialNumbers([]);
+      handleClearOC();
       onSuccess?.();
     },
     onError: (error: any) => {
@@ -95,14 +250,113 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
     },
   });
 
-  const onSubmit = async (data: ProductEntryData) => {
-    const finalData = {
-      ...data,
-      serialNumbers: serialNumbers.length > 0 ? serialNumbers : undefined,
-    };
+  const ocEntryMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await fetch("/api/product-entry-oc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || "Error al ingresar producto con OC");
+      }
+      return response.json();
+    },
+    onSuccess: (result: any) => {
+      const r = result.receipt;
+      toast({
+        title: "Ingreso exitoso",
+        description: `Recibidas ${r.thisEntry} unidades. Quedan ${r.remaining} pendientes de ${r.ordered} ordenadas.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/metrics"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ordenes-compra", selectedOC, "lines"] });
 
-    entryMutation.mutate(finalData);
+      // Reset line selection but keep OC for batch processing
+      setSelectedLine(null);
+      form.setValue("productId", 0);
+      form.setValue("quantity", 1);
+      form.setValue("price", 0);
+      form.setValue("reason", "");
+      setSerialNumbers([]);
+      onSuccess?.();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error al ingresar producto",
+        description: error.message || "Ocurrió un error inesperado",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutación para crear centro de costo
+  const createCostCenterMutation = useMutation({
+    mutationFn: async (data: { costCenter: string; location?: string }) => {
+      const response = await fetch("/api/cost-centers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        throw new Error("Error al crear centro de costo");
+      }
+      return response.json();
+    },
+  });
+
+  const onSubmit = async (data: ProductEntryData) => {
+    const serials = serialNumbers.length > 0 ? serialNumbers : undefined;
+
+    if (isOcMode && selectedLine) {
+      // Submit via OC endpoint
+      ocEntryMutation.mutate({
+        purchaseOrderNumber: selectedOC,
+        purchaseOrderLine: selectedLine.numlinea,
+        costCenter: data.costCenter,
+        productId: data.productId,
+        quantity: data.quantity,
+        price: data.price,
+        serialNumbers: serials,
+        reason: data.reason || undefined,
+      });
+    } else {
+      // Manual entry - create cost center if needed
+      if (!costCenters.includes(data.costCenter)) {
+        try {
+          await createCostCenterMutation.mutateAsync({
+            costCenter: data.costCenter,
+            location: data.location || undefined,
+          });
+          toast({
+            title: "Centro de costo creado",
+            description: `Se creó el centro de costo "${data.costCenter}" con sus bodegas correspondientes.`,
+          });
+        } catch (error: any) {
+          toast({
+            title: "Error al crear centro de costo",
+            description: error.message || "No se pudo crear el centro de costo",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      entryMutation.mutate({
+        ...data,
+        serialNumbers: serials,
+      });
+    }
   };
+
+  // Cuando se encuentra un producto por código de barras
+  useEffect(() => {
+    if (barcodeFlow.state === "product-found" && barcodeFlow.product) {
+      form.setValue("productId", barcodeFlow.product.id);
+      barcodeFlow.reset();
+    }
+  }, [barcodeFlow.state, barcodeFlow.product, form]);
 
   // Agregar número de serie
   const addSerialNumber = () => {
@@ -117,8 +371,201 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
     setSerialNumbers(serialNumbers.filter((_, i) => i !== index));
   };
 
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return "-";
+    try { return new Date(dateStr).toLocaleDateString("es-CL"); } catch { return dateStr; }
+  };
+
+  const formatMoney = (val: number) => {
+    return "$" + val.toLocaleString("es-CL", { minimumFractionDigits: 0 });
+  };
+
+  const isPending = entryMutation.isPending || ocEntryMutation.isPending || createCostCenterMutation.isPending;
+  const maxQuantity = selectedLine ? selectedLine.pendingQuantity : undefined;
+
   return (
     <div className="space-y-6">
+      {/* ======================== */}
+      {/* Sección OC (Colapsable) */}
+      {/* ======================== */}
+      <div className="border rounded-lg">
+        <button
+          type="button"
+          onClick={() => setOcExpanded(!ocExpanded)}
+          className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors rounded-lg"
+        >
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <FileText className="w-4 h-4" />
+            Vincular con Orden de Compra (Opcional)
+            {selectedOC && (
+              <Badge variant="default" className="bg-blue-100 text-blue-700 ml-2">
+                OC {selectedOC}
+              </Badge>
+            )}
+          </div>
+          {ocExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+
+        {ocExpanded && (
+          <div className="px-3 pb-3 space-y-3 border-t">
+            {/* OC Search or OC Info */}
+            {selectedOC ? (
+              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg mt-3">
+                <FileText className="w-4 h-4 text-blue-600" />
+                <span className="font-mono font-semibold text-blue-800">{selectedOC}</span>
+                {selectedOCInfo?.nomaux && (
+                  <span className="text-sm text-blue-700">- {selectedOCInfo.nomaux}</span>
+                )}
+                {selectedOCInfo?.fechaoc && (
+                  <span className="text-xs text-blue-500">{formatDate(selectedOCInfo.fechaoc)}</span>
+                )}
+                <Button variant="ghost" size="sm" onClick={handleClearOC} className="ml-auto h-7 w-7 p-0">
+                  <XCircle className="w-4 h-4 text-blue-500" />
+                </Button>
+              </div>
+            ) : (
+              <div className="relative mt-3">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  placeholder="Buscar por número de OC..."
+                  value={ocSearch}
+                  onChange={(e) => { setOcSearch(e.target.value); setShowOcResults(true); }}
+                  onFocus={() => setShowOcResults(true)}
+                  className="pl-10"
+                />
+                {showOcResults && debouncedOcSearch.length >= 2 && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {isSearchingOC ? (
+                      <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+                        Buscando...
+                      </div>
+                    ) : ocSearchResults.length === 0 ? (
+                      <div className="p-3 text-sm text-muted-foreground">No se encontraron OCs</div>
+                    ) : (
+                      ocSearchResults.map((oc) => (
+                        <button
+                          key={oc.numoc}
+                          type="button"
+                          onClick={() => handleSelectOC(oc)}
+                          className="w-full text-left px-4 py-2.5 hover:bg-muted/50 transition-colors border-b last:border-b-0"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-mono font-semibold text-blue-700">{oc.numoc}</span>
+                              {oc.nomaux && <span className="ml-2 text-sm text-muted-foreground">{oc.nomaux}</span>}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>{formatDate(oc.fechaoc)}</span>
+                              <Badge variant="outline" className="text-xs">{oc.lineCount} items</Badge>
+                            </div>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* OC Cost Center selector */}
+            {selectedOC && ocCostCenters.length > 1 && (
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-muted-foreground">Centro de Costo de la OC</label>
+                <Select value={ocCostCenter} onValueChange={handleSelectOcCostCenter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar centro de costo de la OC" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ocCostCenters.map((cc) => (
+                      <SelectItem key={cc} value={cc}>{cc}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* OC Lines Table */}
+            {selectedOC && ocCostCenter && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-muted-foreground">Items de la OC</label>
+                  {selectedLine && (
+                    <Badge variant="default" className="bg-blue-600 text-xs">
+                      Linea {selectedLine.numlinea} seleccionada
+                      <button type="button" onClick={handleDeselectLine} className="ml-1"><X className="w-3 h-3" /></button>
+                    </Badge>
+                  )}
+                </div>
+                {isLoadingLines ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+                    Cargando items...
+                  </div>
+                ) : ocLines.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2">No se encontraron items</p>
+                ) : (
+                  <div className="border rounded-lg overflow-x-auto max-h-48 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0">
+                        <tr className="border-b bg-muted/50">
+                          <th className="text-left p-2 font-medium">Linea</th>
+                          <th className="text-left p-2 font-medium">Cod.Prod</th>
+                          <th className="text-left p-2 font-medium">Descripcion</th>
+                          <th className="text-right p-2 font-medium">Ordenado</th>
+                          <th className="text-right p-2 font-medium">Recibido</th>
+                          <th className="text-right p-2 font-medium">Pendiente</th>
+                          <th className="text-center p-2 font-medium">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ocLines.map((line) => {
+                          const isSelected = selectedLine?.numlinea === line.numlinea;
+                          return (
+                            <tr
+                              key={`${line.numoc}-${line.numlinea}`}
+                              onClick={() => handleSelectLine(line)}
+                              className={`border-b transition-colors ${
+                                line.isFullyReceived
+                                  ? 'bg-gray-50 text-gray-400 cursor-not-allowed'
+                                  : isSelected
+                                    ? 'bg-blue-100 border-blue-300'
+                                    : 'hover:bg-blue-50 cursor-pointer'
+                              }`}
+                            >
+                              <td className="p-2 font-mono">{line.numlinea}</td>
+                              <td className="p-2 font-mono text-xs">{line.codprod || "-"}</td>
+                              <td className="p-2">
+                                <div className="max-w-[200px] truncate" title={line.desprod || ""}>{line.desprod || "-"}</div>
+                              </td>
+                              <td className="p-2 text-right font-mono">{parseFloat(line.cantidad || "0").toLocaleString("es-CL")}</td>
+                              <td className="p-2 text-right font-mono">{line.localReceivedQuantity.toLocaleString("es-CL")}</td>
+                              <td className="p-2 text-right font-mono font-semibold">{line.pendingQuantity.toLocaleString("es-CL")}</td>
+                              <td className="p-2 text-center">
+                                {line.isFullyReceived ? (
+                                  <Badge variant="default" className="bg-green-100 text-green-700 text-xs"><Check className="w-3 h-3 mr-0.5" />Completo</Badge>
+                                ) : line.localReceivedQuantity > 0 ? (
+                                  <Badge variant="secondary" className="bg-amber-100 text-amber-700 text-xs"><Clock className="w-3 h-3 mr-0.5" />Parcial</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs"><AlertCircle className="w-3 h-3 mr-0.5" />Pendiente</Badge>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ======================== */}
+      {/* Formulario Principal */}
+      {/* ======================== */}
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           {/* Selector de Centro de Costo */}
@@ -132,58 +579,75 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
                   Centro de Costo
                 </FormLabel>
                 <FormControl>
-                  <div className="space-y-2">
-                    {costCenters.length > 0 && (
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar centro de costo existente" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {costCenters.map((center) => (
-                            <SelectItem key={center} value={center}>
-                              {center}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
+                  {isOcMode ? (
+                    <Select value={field.value} onValueChange={(val) => { field.onChange(val); handleSelectOcCostCenter(val); }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar centro de costo de la OC" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ocCostCenters.map((cc) => (
+                          <SelectItem key={cc} value={cc}>{cc}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="space-y-2">
+                      {costCenters.length > 0 && (
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar centro de costo existente" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {costCenters.map((center: string) => (
+                              <SelectItem key={center} value={center}>
+                                {center}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      <Input
+                        placeholder="O escribir nuevo centro de costo"
+                        value={field.value}
+                        onChange={(e) => field.onChange(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </FormControl>
+                <FormDescription>
+                  {isOcMode
+                    ? "Centro de costo obtenido de la Orden de Compra"
+                    : "Selecciona un centro de costo existente o crea uno nuevo"}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Campo de ubicación (solo manual) */}
+          {!isOcMode && (
+            <FormField
+              control={form.control}
+              name="location"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Ubicación (Opcional)</FormLabel>
+                  <FormControl>
                     <Input
-                      placeholder="O escribir nuevo centro de costo"
-                      value={field.value}
-                      onChange={(e) => field.onChange(e.target.value)}
+                      placeholder="Ej: Oficina Central, Planta Norte..."
+                      {...field}
                     />
-                  </div>
-                </FormControl>
-                <FormDescription>
-                  Selecciona un centro de costo existente o crea uno nuevo
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                  </FormControl>
+                  <FormDescription>
+                    Ubicación física del centro de costo (solo para centros nuevos)
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
-          {/* Campo de ubicación (opcional) */}
-          <FormField
-            control={form.control}
-            name="location"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Ubicación (Opcional)</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="Ej: Oficina Central, Planta Norte..."
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>
-                  Ubicación física del centro de costo (solo para centros nuevos)
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Selector de Producto */}
+          {/* Selector de Producto con Código de Barras */}
           <FormField
             control={form.control}
             name="productId"
@@ -193,10 +657,16 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
                   <Package className="w-4 h-4" />
                   Producto
                 </FormLabel>
+                {isOcMode && selectedLine?.localProductId && selectedLine.matchedProductName && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <Badge variant="default" className="bg-green-100 text-green-700">Auto-vinculado</Badge>
+                    <span className="text-muted-foreground">{selectedLine.matchedProductName}</span>
+                  </div>
+                )}
                 <div className="flex gap-2 w-full items-center">
                   <FormControl className="flex-1">
-                    <Select 
-                      value={field.value?.toString()} 
+                    <Select
+                      value={field.value?.toString()}
                       onValueChange={(value) => field.onChange(parseInt(value))}
                     >
                       <SelectTrigger>
@@ -211,77 +681,26 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
                       </SelectContent>
                     </Select>
                   </FormControl>
-                  
-                  <Button 
-                    type="button" 
+
+                  <Button
+                    type="button"
                     size="default"
                     onClick={barcodeFlow.startScanning}
                     title="Escanear código de barras"
-                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold border-2 border-blue-700 min-w-[120px]"
+                    className="bg-red-500 hover:bg-red-600 text-white font-bold border-2 border-red-700 min-w-[120px]"
                   >
-                    <Scan className="w-4 h-4 mr-1" />
-                    📱 Código
+                    📱 SCANNER
                   </Button>
                 </div>
+                {isOcMode && selectedLine && !field.value && (
+                  <p className="text-xs text-amber-600">
+                    No se encontró producto local para codprod "{selectedLine.codprod}". Seleccione uno manualmente.
+                  </p>
+                )}
                 <FormMessage />
               </FormItem>
             )}
           />
-
-          {/* Información del producto seleccionado */}
-          {selectedProduct && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
-              <div className="flex items-center gap-2 mb-3">
-                <Info className="w-4 h-4 text-blue-600" />
-                <h3 className="font-semibold text-blue-900">Información del Producto</h3>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                <div>
-                  <span className="font-medium text-gray-600">SKU:</span>
-                  <p className="text-gray-900">{selectedProduct.sku || 'Sin SKU'}</p>
-                </div>
-                
-                <div>
-                  <span className="font-medium text-gray-600">Código de Barras:</span>
-                  <p className="text-gray-900">{selectedProduct.barcode || 'Sin código'}</p>
-                </div>
-                
-                <div>
-                  <span className="font-medium text-gray-600">Tipo:</span>
-                  <p className="text-gray-900 capitalize">{selectedProduct.productType || 'Sin especificar'}</p>
-                </div>
-                
-                <div>
-                  <span className="font-medium text-gray-600">Requiere Serie:</span>
-                  <Badge variant={selectedProduct.requiresSerial ? "default" : "secondary"}>
-                    {selectedProduct.requiresSerial ? "Sí" : "No"}
-                  </Badge>
-                </div>
-                
-                <div>
-                  <span className="font-medium text-gray-600">Estado:</span>
-                  <Badge variant={selectedProduct.isActive ? "default" : "destructive"}>
-                    {selectedProduct.isActive ? "Activo" : "Inactivo"}
-                  </Badge>
-                </div>
-                
-                {selectedProduct.hasWarranty && (
-                  <div>
-                    <span className="font-medium text-gray-600">Garantía:</span>
-                    <p className="text-gray-900">{selectedProduct.warrantyMonths} meses</p>
-                  </div>
-                )}
-              </div>
-              
-              {selectedProduct.description && (
-                <div>
-                  <span className="font-medium text-gray-600">Descripción:</span>
-                  <p className="text-gray-900 text-sm mt-1">{selectedProduct.description}</p>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Cantidad */}
           <FormField
@@ -296,10 +715,19 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
                     inputMode="numeric"
                     pattern="[0-9]*"
                     min="1"
+                    max={maxQuantity}
                     {...field}
-                    onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      field.onChange(maxQuantity ? Math.min(val, maxQuantity) : val);
+                    }}
                   />
                 </FormControl>
+                {maxQuantity && (
+                  <FormDescription>
+                    Máximo permitido: {maxQuantity.toLocaleString("es-CL")} (pendiente de OC)
+                  </FormDescription>
+                )}
                 <FormMessage />
               </FormItem>
             )}
@@ -325,7 +753,9 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
                   />
                 </FormControl>
                 <FormDescription>
-                  Precio específico para este ingreso en pesos chilenos
+                  {isOcMode && selectedLine
+                    ? `Calculado desde OC: ${formatMoney(selectedLine.calculatedUnitPrice)} - puede modificarse`
+                    : "Precio específico para este ingreso en pesos chilenos"}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -352,7 +782,7 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
                   <Plus className="w-4 h-4" />
                 </Button>
               </div>
-              
+
               {serialNumbers.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {serialNumbers.map((serial, index) => (
@@ -369,7 +799,7 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
                   ))}
                 </div>
               )}
-              
+
               <FormDescription>
                 Este producto requiere {form.watch("quantity")} números de serie únicos
               </FormDescription>
@@ -400,33 +830,41 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
                 Cancelar
               </Button>
             )}
-            <Button 
-              type="submit" 
-              disabled={entryMutation.isPending}
+            <Button
+              type="submit"
+              disabled={isPending}
             >
-              {entryMutation.isPending ? "Procesando..." : "Ingresar Producto"}
+              {isPending ? "Procesando..." : "Ingresar Producto"}
             </Button>
           </div>
         </form>
       </Form>
 
-      {/* Barcode Scanner Component */}
-      <BarcodeScanner 
+      {/* Escáner de códigos de barras */}
+      <BarcodeScannerNative
         isOpen={barcodeFlow.state === "scanning"}
         onClose={barcodeFlow.handleCancel}
         onScan={barcodeFlow.handleBarcodeScanned}
+        title="Escanear Código de Barras"
+        description="Apunta la cámara hacia el código de barras del producto"
       />
 
-      {/* Product Not Found Modal */}
+      {/* Modales del flujo completo de códigos de barras */}
       <ProductNotFoundModal
         isOpen={barcodeFlow.state === "product-not-found"}
         onClose={barcodeFlow.handleCancel}
         barcode={barcodeFlow.barcode || ""}
-        onCreateNew={() => barcodeFlow.handleCreateNew()}
-        onAssociateExisting={() => barcodeFlow.handleAssociateExisting()}
+        onCreateNew={barcodeFlow.handleCreateNew}
+        onAssociateExisting={barcodeFlow.handleAssociateExisting}
       />
 
-      {/* Create New Product Modal */}
+      <AssociateProductModal
+        isOpen={barcodeFlow.state === "associating-existing"}
+        onClose={barcodeFlow.handleCancel}
+        barcode={barcodeFlow.barcode || ""}
+        onSuccess={barcodeFlow.handleProductAssociated}
+      />
+
       <NewProductWithBarcodeForm
         isOpen={barcodeFlow.state === "creating-new"}
         onClose={barcodeFlow.handleCancel}
@@ -434,13 +872,14 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
         onSuccess={barcodeFlow.handleProductCreated}
       />
 
-      {/* Associate Existing Product Modal */}
-      <AssociateProductModal
-        isOpen={barcodeFlow.state === "associating-existing"}
-        onClose={barcodeFlow.handleCancel}
-        barcode={barcodeFlow.barcode || ""}
-        onSuccess={barcodeFlow.handleProductAssociated}
-      />
+      {/* Notificación cuando producto es encontrado */}
+      {barcodeFlow.state === "product-found" && barcodeFlow.product && (
+        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <p className="text-green-800 text-sm">
+            ✅ Producto encontrado: <strong>{barcodeFlow.product.name}</strong> (SKU: {barcodeFlow.product.sku})
+          </p>
+        </div>
+      )}
     </div>
   );
 }
