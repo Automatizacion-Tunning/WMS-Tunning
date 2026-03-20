@@ -77,38 +77,34 @@ export default function SimpleProductForm({ onSuccess, onCancel }: SimpleProduct
   const onSubmit = async (data: ProductFormData) => {
     try {
       setIsSubmitting(true);
-      
+
       // Separar precio del resto de datos
       const { currentPrice, ...productData } = data;
-      
-      // Crear el producto
-      const response = await apiRequest("/api/products", {
+
+      // Crear el producto (apiRequest lanza error si la respuesta no es ok)
+      await apiRequest("/api/products", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...productData,
           currentPrice: currentPrice || 0,
         }),
       });
 
-      if (response.ok) {
-        toast({
-          title: "Producto creado",
-          description: "El producto ha sido creado exitosamente",
-        });
-        
-        // Invalidar cache
-        queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-        
-        // Resetear formulario
-        form.reset();
-        
-        // Callback de éxito
-        onSuccess?.();
-      } else {
-        throw new Error("Error al crear el producto");
-      }
+      toast({
+        title: "Producto creado",
+        description: "El producto ha sido creado exitosamente",
+      });
+
+      // Invalidar cache
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+
+      // Resetear formulario
+      form.reset();
+
+      // Callback de éxito
+      onSuccess?.();
     } catch (error) {
-      console.error("Error:", error);
       toast({
         title: "Error",
         description: "No se pudo crear el producto. Intente nuevamente.",

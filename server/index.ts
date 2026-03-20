@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
+import createMemoryStore from "memorystore";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
@@ -41,7 +42,10 @@ app.use("/api/auth/login", loginLimiter);
 app.set("trust proxy", 1);
 
 // --- Configurar sesiones ---
+const MemoryStore = createMemoryStore(session);
+
 app.use(session({
+  store: new MemoryStore({ checkPeriod: 86400000 }),
   secret: process.env.SESSION_SECRET || "wms-secret-key-change-in-production",
   resave: false,
   saveUninitialized: false,
@@ -92,10 +96,17 @@ app.use((req, res, next) => {
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    const message = process.env.NODE_ENV === 'production'
+      ? 'Internal Server Error'
+      : err.message || 'Internal Server Error';
 
     res.status(status).json({ message });
-    throw err;
+    console.error(err);
+  });
+
+  // Catch-all 404 for undefined API routes
+  app.use('/api/*', (_req, res) => {
+    res.status(404).json({ message: 'API route not found' });
   });
 
   // importantly only setup vite in development and after
@@ -117,5 +128,21 @@ app.use((req, res, next) => {
     host: "0.0.0.0",
   }, () => {
     log(`serving on port ${port}`);
+  });
+
+  // Graceful shutdown
+  const gracefulShutdown = () => {
+    console.log('Shutting down gracefully...');
+    server.close(() => {
+      console.log('Server closed');
+      process.exit(0);
+    });
+  };
+  process.on('SIGTERM', gracefulShutdown);
+  process.on('SIGINT', gracefulShutdown);
+
+  // Catch unhandled promise rejections
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   });
 })();

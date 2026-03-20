@@ -8,9 +8,19 @@
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "cross-env NODE_ENV=production node --env-file=.env dist/index.js",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "agent": "tsx agents.ts",
+    "agent:list": "tsx agents.ts --list",
+    "agent:front": "tsx agents.ts --agent frontend-dev --task",
+    "agent:back": "tsx agents.ts --agent backend-dev --task",
+    "agent:inventario": "tsx agents.ts --agent supervisor-inventario --task",
+    "agent:bodegas": "tsx agents.ts --agent supervisor-bodegas --task",
+    "agent:usuarios": "tsx agents.ts --agent supervisor-usuarios --task",
+    "agent:test-inv": "tsx agents.ts --agent tester-inventario --task",
+    "agent:test-gen": "tsx agents.ts --agent tester-general --task"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.77",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@neondatabase/serverless": "^0.10.4",

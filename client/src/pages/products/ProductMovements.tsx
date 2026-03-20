@@ -50,14 +50,16 @@ export default function ProductMovements() {
       movementType: "in",
       quantity: 1,
       reason: "",
-      userId: 1, // TODO: Get from auth context
     },
   });
 
   const createMovementMutation = useMutation({
     mutationFn: async (data: MovementFormData) => {
-      const response = await apiRequest("POST", "/api/inventory-movements", data);
-      return response.json();
+      return await apiRequest("/api/inventory-movements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/inventory-movements"] });

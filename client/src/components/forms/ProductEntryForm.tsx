@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { productEntrySchema, type Product } from "@shared/schema";
 import { z } from "zod";
 import { Plus, X, Package, Building2, Scan } from "lucide-react";
@@ -66,23 +67,14 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
 
   const selectedProduct = products.find(p => p.id === form.watch("productId"));
 
-  // Debug logging
-  console.log("📱 DEBUG: Renderizando ProductEntryForm");
-  console.log("📱 DEBUG: Products:", products.length);
-  console.log("📱 DEBUG: BarcodeFlow state:", barcodeFlow.state);
-
   // Mutación para el ingreso de producto
   const entryMutation = useMutation({
     mutationFn: async (data: ProductEntryData) => {
-      const response = await fetch("/api/product-entry", {
+      return await apiRequest("/api/product-entry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!response.ok) {
-        throw new Error("Error al ingresar producto");
-      }
-      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -105,15 +97,11 @@ export default function ProductEntryForm({ onSuccess, onCancel }: ProductEntryFo
   // Mutación para crear centro de costo
   const createCostCenterMutation = useMutation({
     mutationFn: async (data: { costCenter: string; location?: string }) => {
-      const response = await fetch("/api/cost-centers", {
+      return await apiRequest("/api/cost-centers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!response.ok) {
-        throw new Error("Error al crear centro de costo");
-      }
-      return response.json();
     },
   });
 

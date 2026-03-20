@@ -150,10 +150,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             </form>
           </Form>
 
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>Usuario de prueba: <strong>admin</strong></p>
-            <p>Contraseña: <strong>admin</strong></p>
-          </div>
         </CardContent>
       </Card>
     </div>

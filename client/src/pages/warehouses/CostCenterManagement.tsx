@@ -42,8 +42,11 @@ export default function CostCenterManagement() {
 
   const createCostCenterMutation = useMutation({
     mutationFn: async (data: CostCenterFormData) => {
-      const response = await apiRequest("POST", "/api/cost-centers", data);
-      return response.json();
+      return await apiRequest("/api/cost-centers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/warehouses"] });

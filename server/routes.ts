@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { hashPassword, comparePassword, isPlaintextPassword } from "./auth";
+import { hashPassword, comparePassword, isPlaintextPassword, isSha256Hash } from "./auth";
 import { requirePermission, getUserPermissions, clearUserCache, clearAllCache } from "./authorization";
 import {
   insertUserSchema, insertWarehouseSchema, insertProductSchema,
@@ -51,35 +51,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           return res.status(401).json({ message: "Invalid credentials" });
         }
+      } else if (isSha256Hash(user.password)) {
+        // Migrar SHA256 legacy a scrypt si corresponde
+        const isValid = await comparePassword(password, user.password);
+        if (!isValid) {
+          return res.status(401).json({ message: "Invalid credentials" });
+        }
+        const newHash = await hashPassword(password);
+        await storage.updateUser(user.id, { password: newHash });
       } else {
-        // Contraseña ya hasheada: comparar con hash
+        // Contraseña ya hasheada (scrypt): comparar con hash
         const isValid = await comparePassword(password, user.password);
         if (!isValid) {
           return res.status(401).json({ message: "Invalid credentials" });
         }
       }
 
-      // Crear sesión
-      req.session.userId = user.id;
+      // Crear sesión con regenerate para prevenir session fixation
       const { password: _, ...userWithoutPassword } = user;
-      req.session.user = userWithoutPassword;
-
-      res.json({
-        message: "Login successful",
-        user: userWithoutPassword
+      const sessionData = { userId: user.id, user: userWithoutPassword };
+      req.session.regenerate((err) => {
+        if (err) return res.status(500).json({ message: "Session error" });
+        req.session.userId = sessionData.userId;
+        req.session.user = sessionData.user;
+        res.json({ message: "Login successful", user: userWithoutPassword });
       });
     } catch (error) {
       res.status(500).json({ message: "Login failed" });
     }
   });
 
-  app.post("/api/auth/logout", async (req, res) => {
+  app.post("/api/auth/logout", requireAuth, async (req, res) => {
     try {
       req.session.destroy((err: any) => {
         if (err) {
           return res.status(500).json({ message: "Could not log out" });
         }
-        res.clearCookie('connect.sid');
+        res.clearCookie('wms.sid', {
+          path: '/',
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax' as const
+        });
         res.json({ message: "Logout successful" });
       });
     } catch (error) {
@@ -103,7 +116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // DASHBOARD ROUTES (requiere autenticación)
   // ============================================================
 
-  app.get("/api/dashboard/metrics", requireAuth, async (req, res) => {
+  app.get("/api/dashboard/metrics", requirePermission("dashboard.view"), async (req, res) => {
     try {
       const metrics = await storage.getDashboardMetrics();
       res.json(metrics);
@@ -112,10 +125,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/dashboard/recent-inventory", requireAuth, async (req, res) => {
+  app.get("/api/dashboard/recent-inventory", requirePermission("dashboard.view"), async (req, res) => {
     try {
-      const recentInventory = await storage.getAllInventory();
-      res.json(recentInventory.slice(0, 10));
+      // TODO: Optimizar con storage.getRecentInventory(10) usando SQL LIMIT en vez de traer todo
+      const allInventory = await storage.getAllInventory();
+      const recentInventory = allInventory.slice(0, 10);
+      res.json(recentInventory);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch recent inventory" });
     }
@@ -125,7 +140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // WAREHOUSE ROUTES (requiere autenticación)
   // ============================================================
 
-  app.get("/api/warehouses", requireAuth, async (req, res) => {
+  app.get("/api/warehouses", requirePermission("warehouses.view"), async (req, res) => {
     try {
       const warehouses = await storage.getAllWarehouses();
       res.json(warehouses);
@@ -134,7 +149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/warehouses/:id", requireAuth, async (req, res) => {
+  app.get("/api/warehouses/:id", requirePermission("warehouses.view"), async (req, res) => {
     try {
       const warehouse = await storage.getWarehouse(parseInt(req.params.id));
       if (!warehouse) {
@@ -207,7 +222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // PRODUCT ROUTES (requiere autenticación)
   // ============================================================
 
-  app.get("/api/products", requireAuth, async (req, res) => {
+  app.get("/api/products", requirePermission("products.view"), async (req, res) => {
     try {
       if (req.query.barcode) {
         const product = await storage.getProductByBarcode(req.query.barcode as string);
@@ -224,7 +239,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/products/with-details", requireAuth, async (req, res) => {
+  app.get("/api/products/with-details", requirePermission("products.view"), async (req, res) => {
     try {
       const products = await storage.getAllProductsWithDetails();
       res.json(products);
@@ -233,7 +248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/products/:id", requireAuth, async (req, res) => {
+  app.get("/api/products/:id", requirePermission("products.view"), async (req, res) => {
     try {
       const product = await storage.getProduct(parseInt(req.params.id));
       if (!product) {
@@ -343,7 +358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/products/barcode/:barcode", requireAuth, async (req, res) => {
+  app.get("/api/products/barcode/:barcode", requirePermission("products.view"), async (req, res) => {
     try {
       const product = await storage.getProductByBarcode(req.params.barcode);
       if (!product) {
@@ -359,7 +374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // INVENTORY ROUTES (requiere autenticación)
   // ============================================================
 
-  app.get("/api/inventory", requireAuth, async (req, res) => {
+  app.get("/api/inventory", requirePermission("inventory.view"), async (req, res) => {
     try {
       const inventory = await storage.getAllInventory();
       res.json(inventory);
@@ -368,7 +383,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/inventory/warehouse/:warehouseId", requireAuth, async (req, res) => {
+  app.get("/api/inventory/warehouse/:warehouseId", requirePermission("inventory.view"), async (req, res) => {
     try {
       const inventory = await storage.getInventoryByWarehouse(parseInt(req.params.warehouseId));
       res.json(inventory);
@@ -377,7 +392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/inventory/product/:productId", requireAuth, async (req, res) => {
+  app.get("/api/inventory/product/:productId", requirePermission("inventory.view"), async (req, res) => {
     try {
       const inventory = await storage.getInventoryByProduct(parseInt(req.params.productId));
       res.json(inventory);
@@ -390,7 +405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // INVENTORY MOVEMENT ROUTES (requiere autenticación)
   // ============================================================
 
-  app.get("/api/inventory-movements", requireAuth, async (req, res) => {
+  app.get("/api/inventory-movements", requirePermission("inventory.view"), async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
       const movements = await storage.getInventoryMovements(limit);
@@ -404,17 +419,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/inventory-movements", requirePermission("inventory.movements"), async (req: any, res) => {
     try {
       const validatedData = insertInventoryMovementSchema.parse(req.body);
-      const movement = await storage.createInventoryMovement(validatedData);
+      const movementData = { ...validatedData, userId: req.session.userId! };
+
+      if (!['in', 'out'].includes(movementData.movementType)) {
+        return res.status(400).json({ message: "Tipo de movimiento debe ser 'in' o 'out'" });
+      }
+      if (movementData.quantity <= 0) {
+        return res.status(400).json({ message: "La cantidad debe ser mayor a 0" });
+      }
+
+      const movement = await storage.createInventoryMovement(movementData);
       res.status(201).json(movement);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof ZodError) {
         return res.status(400).json({ message: "Invalid movement data" });
+      }
+      if (error?.message?.includes('Stock insuficiente')) {
+        return res.status(400).json({ message: error.message });
       }
       res.status(500).json({ message: "Failed to create inventory movement" });
     }
   });
 
-  app.get("/api/inventory-movements/product/:productId", requireAuth, async (req, res) => {
+  app.get("/api/inventory-movements/product/:productId", requirePermission("inventory.view"), async (req, res) => {
     try {
       const movements = await storage.getInventoryMovementsByProduct(parseInt(req.params.productId));
       res.json(movements);
@@ -427,7 +454,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // TRANSFER ORDER ROUTES (requiere autenticación)
   // ============================================================
 
-  app.get("/api/transfer-orders", requireAuth, async (req, res) => {
+  app.get("/api/transfer-orders", requirePermission("orders.view_transfers"), async (req, res) => {
     try {
       const userId = req.query.userId ? parseInt(req.query.userId as string) : undefined;
       const role = req.query.role as string;
@@ -440,7 +467,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/transfer-orders/:id", requireAuth, async (req, res) => {
+  app.get("/api/transfer-orders/:id", requirePermission("orders.view_transfers"), async (req, res) => {
     try {
       const order = await storage.getTransferOrder(parseInt(req.params.id));
       if (!order) {
@@ -452,9 +479,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/transfer-orders", requireAuth, async (req: any, res) => {
+  app.post("/api/transfer-orders", requirePermission("orders.create_transfers"), async (req: any, res) => {
     try {
       const validatedData = transferRequestSchema.parse(req.body);
+
+      if (validatedData.sourceWarehouseId === validatedData.destinationWarehouseId) {
+        return res.status(400).json({ message: "La bodega de origen y destino no pueden ser la misma" });
+      }
 
       const orderNumber = await storage.generateOrderNumber();
 
@@ -490,6 +521,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!['approved', 'rejected'].includes(status)) {
         return res.status(400).json({ message: "Invalid status. Must be 'approved' or 'rejected'" });
+      }
+
+      const currentOrder = await storage.getTransferOrder(parseInt(req.params.id));
+      if (!currentOrder) {
+        return res.status(404).json({ message: "Transfer order not found" });
+      }
+      if (currentOrder.status !== 'pending') {
+        return res.status(400).json({ message: "Solo se pueden modificar órdenes en estado pendiente" });
       }
 
       const order = await storage.updateTransferOrderStatus(
@@ -538,6 +577,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Validar unicidad de números de serie antes de insertar
+      if (product.requiresSerial && validatedData.serialNumbers) {
+        for (const serialNumber of validatedData.serialNumbers) {
+          const isValid = await storage.validateSerialNumber(validatedData.productId, serialNumber);
+          if (!isValid) {
+            return res.status(409).json({
+              message: `El número de serie '${serialNumber}' ya existe para este producto.`
+            });
+          }
+        }
+      }
+
       const movement = await storage.createInventoryMovement({
         productId: validatedData.productId,
         warehouseId: principalWarehouse.id,
@@ -584,11 +635,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const warehouses = await storage.getAllWarehouses();
-      const principalWarehouse = warehouses.find(w => w.warehouseType === 'main');
-
-      if (!principalWarehouse) {
-        return res.status(400).json({ message: "No principal warehouse found" });
+      // Validar unicidad de números de serie antes de insertar
+      if (product.requiresSerial && validatedData.serialNumbers) {
+        for (const serialNumber of validatedData.serialNumbers) {
+          const isValid = await storage.validateSerialNumber(validatedData.productId, serialNumber);
+          if (!isValid) {
+            return res.status(409).json({
+              message: `El número de serie '${serialNumber}' ya existe para este producto.`
+            });
+          }
+        }
       }
 
       const appliedPrice = validatedData.price;
@@ -607,7 +663,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         for (const serialNumber of validatedData.serialNumbers) {
           await storage.createProductSerial({
             productId: validatedData.productId,
-            warehouseId: principalWarehouse.id,
+            warehouseId: validatedData.warehouseId,
             serialNumber,
             movementId: movement.id,
             status: 'active',
@@ -628,7 +684,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // PRINCIPAL WAREHOUSE ROUTES (requiere autenticación)
   // ============================================================
 
-  app.get("/api/principal-warehouse/:costCenter", requireAuth, async (req, res) => {
+  app.get("/api/principal-warehouse/:costCenter", requirePermission("warehouses.view"), async (req, res) => {
     try {
       const warehouse = await storage.getPrincipalWarehouse(req.params.costCenter);
       if (!warehouse) {
@@ -658,7 +714,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // USER MANAGEMENT ROUTES (requiere admin)
   // ============================================================
 
-  app.get("/api/users", requireAuth, async (req, res) => {
+  app.get("/api/users", requirePermission("users.view"), async (req, res) => {
     try {
       const users = await storage.getAllUsers();
       res.json(users.map(user => ({ ...user, password: undefined })));
@@ -667,7 +723,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users/:id", requireAuth, async (req, res) => {
+  app.get("/api/users/:id", requirePermission("users.view"), async (req, res) => {
     try {
       const user = await storage.getUser(parseInt(req.params.id));
       if (!user) {
@@ -695,9 +751,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const user = await storage.createUser(validatedData as InsertUser);
       res.status(201).json({ ...user, password: undefined });
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof ZodError) {
         return res.status(400).json({ message: "Invalid user data", errors: error.errors });
+      }
+      if (error?.code === '23505') {
+        return res.status(409).json({ message: "El nombre de usuario ya existe" });
       }
       res.status(500).json({ message: "Failed to create user" });
     }
@@ -722,6 +781,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
+      clearUserCache(parseInt(req.params.id));
       res.json({ ...user, password: undefined });
     } catch (error) {
       if (error instanceof ZodError) {
@@ -731,19 +791,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/users/:id", requirePermission("users.manage"), async (req, res) => {
+  app.delete("/api/users/:id", requirePermission("users.manage"), async (req: any, res) => {
     try {
+      if (parseInt(req.params.id) === req.session.userId) {
+        return res.status(400).json({ message: "No puede eliminar su propia cuenta" });
+      }
       const success = await storage.deleteUser(parseInt(req.params.id));
       if (!success) {
         return res.status(404).json({ message: "User not found" });
       }
+      clearUserCache(parseInt(req.params.id));
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete user" });
     }
   });
 
-  app.get("/api/users/role/:role", requireAuth, async (req, res) => {
+  app.get("/api/users/role/:role", requirePermission("users.view"), async (req, res) => {
     try {
       const users = await storage.getUsersByRole(req.params.role);
       res.json(users.map(user => ({ ...user, password: undefined })));
@@ -752,7 +816,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/project-managers", requireAuth, async (req, res) => {
+  app.get("/api/project-managers", requirePermission("users.view"), async (req, res) => {
     try {
       const managers = await storage.getProjectManagers();
       res.json(managers.map(user => ({ ...user, password: undefined })));
@@ -772,13 +836,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
+      clearUserCache(parseInt(req.params.id));
       res.json({ ...user, password: undefined });
     } catch (error) {
       res.status(500).json({ message: "Failed to assign permissions" });
     }
   });
 
-  app.get("/api/users/:id/permissions/:permission", requireAuth, async (req, res) => {
+  app.get("/api/users/:id/permissions/:permission", requirePermission("users.view"), async (req, res) => {
     try {
       const hasPermission = await storage.checkUserPermission(
         parseInt(req.params.id),
@@ -868,7 +933,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             lastName: pavUser.appaterno || null,
             email: pavUser.email_tunning || null,
             ficha,
-            role: "user",
+            role: "sin_acceso",
             permissions: [],
             managedWarehouses: [],
             isActive: true,
@@ -905,7 +970,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ORDENES DE COMPRA ROUTES (datos desde Tunning DB)
   // ============================================================
 
-  app.get("/api/ordenes-compra", requireAuth, async (req, res) => {
+  app.get("/api/ordenes-compra", requirePermission("orders.view_purchase"), async (req, res) => {
     try {
       const { getOrdenesCompra } = await import("./tunning-db");
       const page = parseInt(req.query.page as string) || 1;
@@ -948,7 +1013,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/ordenes-compra/cost-centers", requireAuth, async (req, res) => {
+  app.get("/api/ordenes-compra/cost-centers", requirePermission("orders.view_purchase"), async (req, res) => {
     try {
       const { getOrdenesCompraCostCenters } = await import("./tunning-db");
       const costCenters = await getOrdenesCompraCostCenters();
@@ -960,7 +1025,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Buscar OCs por numero (autocomplete)
-  app.get("/api/ordenes-compra/search", requireAuth, async (req, res) => {
+  app.get("/api/ordenes-compra/search", requirePermission("orders.view_purchase"), async (req, res) => {
     try {
       const { searchOrdenesCompraNumbers } = await import("./tunning-db");
       const q = (req.query.q as string) || "";
@@ -974,7 +1039,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Obtener CCs de una OC especifica
-  app.get("/api/ordenes-compra/:numoc/cost-centers", requireAuth, async (req, res) => {
+  app.get("/api/ordenes-compra/:numoc/cost-centers", requirePermission("orders.view_purchase"), async (req, res) => {
     try {
       const { getOrdenCompraCostCentersByOC } = await import("./tunning-db");
       const costCenters = await getOrdenCompraCostCentersByOC(req.params.numoc);
@@ -986,7 +1051,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Obtener lineas de OC por CC, enriquecidas con datos locales de recepcion
-  app.get("/api/ordenes-compra/:numoc/lines", requireAuth, async (req, res) => {
+  app.get("/api/ordenes-compra/:numoc/lines", requirePermission("orders.view_purchase"), async (req, res) => {
     try {
       const { getOrdenCompraByNumber } = await import("./tunning-db");
       const numoc = req.params.numoc;
@@ -1093,6 +1158,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // 5.1 Validar unicidad de números de serie antes de insertar
+      if (product.requiresSerial && validatedData.serialNumbers) {
+        for (const serialNumber of validatedData.serialNumbers) {
+          const isValid = await storage.validateSerialNumber(validatedData.productId, serialNumber);
+          if (!isValid) {
+            return res.status(409).json({
+              message: `El número de serie '${serialNumber}' ya existe para este producto.`
+            });
+          }
+        }
+      }
+
       // 6. Crear movimiento de inventario con referencia OC
       const movement = await storage.createInventoryMovement({
         productId: validatedData.productId,
@@ -1156,7 +1233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // UNITS ROUTES (requiere autenticación)
   // ============================================================
 
-  app.get("/api/units", requireAuth, async (req, res) => {
+  app.get("/api/units", requirePermission("products.view"), async (req, res) => {
     try {
       const units = await storage.getAllUnits();
       res.json(units);
@@ -1165,7 +1242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/units/:id", requireAuth, async (req, res) => {
+  app.get("/api/units/:id", requirePermission("products.view"), async (req, res) => {
     try {
       const unit = await storage.getUnit(parseInt(req.params.id));
       if (!unit) {
@@ -1180,11 +1257,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/units", requirePermission("products.edit"), async (req, res) => {
     try {
       const validatedData = insertUnitSchema.parse(req.body);
+      if (!validatedData.name || !validatedData.name.trim()) {
+        return res.status(400).json({ message: "El nombre de la unidad es requerido" });
+      }
       const unit = await storage.createUnit(validatedData);
       res.status(201).json(unit);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof ZodError) {
-        return res.status(400).json({ message: "Invalid unit data" });
+        return res.status(400).json({ message: "Invalid unit data", errors: error.errors });
+      }
+      if (error?.code === '23505') {
+        return res.status(409).json({ message: "Ya existe una unidad con ese nombre" });
       }
       res.status(500).json({ message: "Failed to create unit" });
     }
@@ -1222,7 +1305,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // CATEGORIES ROUTES (requiere autenticación)
   // ============================================================
 
-  app.get("/api/categories", requireAuth, async (req, res) => {
+  app.get("/api/categories", requirePermission("products.view"), async (req, res) => {
     try {
       const categories = await storage.getAllCategories();
       res.json(categories);
@@ -1231,7 +1314,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/categories/:id", requireAuth, async (req, res) => {
+  app.get("/api/categories/:id", requirePermission("products.view"), async (req, res) => {
     try {
       const category = await storage.getCategory(parseInt(req.params.id));
       if (!category) {
@@ -1246,11 +1329,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/categories", requirePermission("products.edit"), async (req, res) => {
     try {
       const validatedData = insertCategorySchema.parse(req.body);
+      if (!validatedData.name || !validatedData.name.trim()) {
+        return res.status(400).json({ message: "El nombre de la categoría es requerido" });
+      }
       const category = await storage.createCategory(validatedData);
       res.status(201).json(category);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof ZodError) {
-        return res.status(400).json({ message: "Invalid category data" });
+        return res.status(400).json({ message: "Invalid category data", errors: error.errors });
+      }
+      if (error?.code === '23505') {
+        return res.status(409).json({ message: "Ya existe una categoría con ese nombre" });
       }
       res.status(500).json({ message: "Failed to create category" });
     }
@@ -1288,7 +1377,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // BRANDS ROUTES (requiere autenticación)
   // ============================================================
 
-  app.get("/api/brands", requireAuth, async (req, res) => {
+  app.get("/api/brands", requirePermission("products.view"), async (req, res) => {
     try {
       const brands = await storage.getAllBrands();
       res.json(brands);
@@ -1297,7 +1386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/brands/:id", requireAuth, async (req, res) => {
+  app.get("/api/brands/:id", requirePermission("products.view"), async (req, res) => {
     try {
       const brand = await storage.getBrand(parseInt(req.params.id));
       if (!brand) {
@@ -1312,11 +1401,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/brands", requirePermission("products.edit"), async (req, res) => {
     try {
       const validatedData = insertBrandSchema.parse(req.body);
+      if (!validatedData.name || !validatedData.name.trim()) {
+        return res.status(400).json({ message: "El nombre de la marca es requerido" });
+      }
       const brand = await storage.createBrand(validatedData);
       res.status(201).json(brand);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof ZodError) {
-        return res.status(400).json({ message: "Invalid brand data" });
+        return res.status(400).json({ message: "Invalid brand data", errors: error.errors });
+      }
+      if (error?.code === '23505') {
+        return res.status(409).json({ message: "Ya existe una marca con ese nombre" });
       }
       res.status(500).json({ message: "Failed to create brand" });
     }
@@ -1368,7 +1463,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // RBAC - ROLES MANAGEMENT
   // ============================================================
 
-  app.get("/api/roles", requireAuth, async (req, res) => {
+  app.get("/api/roles", requirePermission("roles.view"), async (req, res) => {
     try {
       const allRoles = await storage.getAllRoles();
       res.json(allRoles);
@@ -1377,7 +1472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/permissions", requireAuth, async (req, res) => {
+  app.get("/api/permissions", requirePermission("roles.view"), async (req, res) => {
     try {
       const allPermissions = await storage.getAllPermissions();
       res.json(allPermissions);
@@ -1386,7 +1481,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/roles/:id", requireAuth, async (req, res) => {
+  app.get("/api/roles/:id", requirePermission("roles.view"), async (req, res) => {
     try {
       const role = await storage.getRoleById(parseInt(req.params.id));
       if (!role) {
@@ -1418,6 +1513,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!role) {
         return res.status(404).json({ message: "Rol no encontrado" });
       }
+      clearAllCache();
       res.json(role);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -1430,7 +1526,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/roles/:id/permissions", requirePermission("roles.manage"), async (req, res) => {
     try {
       const validatedData = updateRolePermissionsSchema.parse(req.body);
-      await storage.updateRolePermissions(parseInt(req.params.id), validatedData.permissions);
+      await storage.updateRolePermissions(parseInt(req.params.id), validatedData.permissionKeys);
       clearAllCache();
       const updated = await storage.getRoleById(parseInt(req.params.id));
       res.json(updated);
@@ -1448,6 +1544,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!success) {
         return res.status(404).json({ message: "Rol no encontrado" });
       }
+      clearAllCache();
       res.json({ message: "Rol eliminado exitosamente" });
     } catch (error: any) {
       res.status(400).json({ message: error.message || "Error al eliminar rol" });

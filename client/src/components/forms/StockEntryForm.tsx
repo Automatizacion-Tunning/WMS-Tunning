@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { warehouseEntrySchema, type Product } from "@shared/schema";
+import { warehouseEntrySchema, type Product, type Warehouse } from "@shared/schema";
 import BarcodeScannerNative from "@/components/ui/barcode-scanner-native";
 import ProductNotFoundModal from "@/components/modals/ProductNotFoundModal";
 import AssociateProductModal from "@/components/modals/AssociateProductModal";
@@ -39,10 +39,15 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
     queryKey: ["/api/products"],
   });
 
+  const { data: warehouses = [] } = useQuery<Warehouse[]>({
+    queryKey: ["/api/warehouses"],
+  });
+
   const form = useForm<StockEntryData>({
     resolver: zodResolver(warehouseEntrySchema),
     defaultValues: {
       productId: 0,
+      warehouseId: 0,
       quantity: 1,
       price: 0,
       serialNumbers: [],
@@ -58,12 +63,15 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
 
   const stockEntryMutation = useMutation({
     mutationFn: async (data: StockEntryData) => {
-      const response = await apiRequest("POST", "/api/stock-entry", {
-        ...data,
-        serialNumbers: requiresSerial ? serialNumbers : undefined,
-        barcodeScanned: barcodeFlow.barcode || undefined,
+      return await apiRequest("/api/stock-entry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...data,
+          serialNumbers: requiresSerial ? serialNumbers : undefined,
+          barcodeScanned: barcodeFlow.barcode || undefined,
+        }),
       });
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
@@ -86,7 +94,6 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
 
   // Manejadores del flujo de códigos de barras
   const handleBarcodeScanned = (barcode: string) => {
-    console.log("🎯 Formulario recibió código:", barcode);
     barcodeFlow.handleBarcodeScanned(barcode);
   };
 
@@ -225,6 +232,34 @@ export default function StockEntryForm({ onSuccess, onCancel }: StockEntryFormPr
                   </div>
                 )}
               </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="warehouseId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Bodega</FormLabel>
+              <Select
+                onValueChange={(value) => field.onChange(parseInt(value))}
+                value={field.value?.toString()}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar bodega" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {warehouses.map((wh: Warehouse) => (
+                    <SelectItem key={wh.id} value={wh.id.toString()}>
+                      {wh.name} ({wh.costCenter})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}

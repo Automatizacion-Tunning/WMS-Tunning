@@ -27,12 +27,6 @@ export default function AssociateProductModal({
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
 
-  // Debug logs para verificar el código recibido
-  console.log("🔗 Modal recibió código:", barcode);
-  console.log("🔗 Tipo de código:", typeof barcode);
-  console.log("🔗 Longitud código:", barcode?.length);
-  console.log("🔗 Código vacío?:", !barcode || barcode.trim() === "");
-
   // Obtener productos sin código de barras
   const { data: allProducts = [], isLoading } = useQuery({
     queryKey: ["/api/products"],
@@ -48,29 +42,18 @@ export default function AssociateProductModal({
 
   const associateMutation = useMutation({
     mutationFn: async (productId: number) => {
-      console.log("🔗 Asociando código:", barcode, "a producto:", productId);
-      console.log("🔍 Tipo de barcode:", typeof barcode, "valor:", barcode);
-      
       // Verificar que el código no esté vacío
       if (!barcode || barcode.trim() === "") {
         throw new Error("Código de barras requerido para asociar");
       }
       
       const requestBody = { barcode: barcode.trim() };
-      console.log("📤 Enviando:", requestBody);
-      
-      const response = await fetch(`/api/products/${productId}/barcode`, {
+
+      return await apiRequest(`/api/products/${productId}/barcode`, {
         method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
-        headers: { "Content-Type": "application/json" }
       });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Error al asociar código');
-      }
-      
-      return response.json();
     },
     onSuccess: (product) => {
       toast({

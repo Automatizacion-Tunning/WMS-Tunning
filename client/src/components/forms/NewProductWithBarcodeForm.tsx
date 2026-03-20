@@ -66,18 +66,11 @@ export default function NewProductWithBarcodeForm({
 
   const createMutation = useMutation({
     mutationFn: async (data: ProductFormData) => {
-      const response = await fetch("/api/products", {
+      return await apiRequest("/api/products", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-        headers: { "Content-Type": "application/json" }
       });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Error al crear producto');
-      }
-      
-      return response.json();
     },
     onSuccess: (product) => {
       toast({

@@ -50,8 +50,11 @@ export default function WarehouseForm({ onSuccess }: WarehouseFormProps) {
 
   const createWarehouseMutation = useMutation({
     mutationFn: async (data: WarehouseFormData) => {
-      const response = await apiRequest("POST", "/api/warehouses", data);
-      return response.json();
+      return await apiRequest("/api/warehouses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/warehouses"] });
@@ -116,20 +119,9 @@ export default function WarehouseForm({ onSuccess }: WarehouseFormProps) {
             name="costCenter"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Centro de Costos</FormLabel>
+                <FormLabel>Centro de Costo</FormLabel>
                 <FormControl>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona el centro de costos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="PRINCIPAL">PRINCIPAL</SelectItem>
-                      <SelectItem value="UM2">UM2</SelectItem>
-                      <SelectItem value="PLATAFORMA">PLATAFORMA</SelectItem>
-                      <SelectItem value="PEM">PEM</SelectItem>
-                      <SelectItem value="INTEGRADOR">INTEGRADOR</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input placeholder="Ej: CC252130" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

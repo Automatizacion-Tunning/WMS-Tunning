@@ -39,7 +39,7 @@ export default function NewProductForm({ onSuccess, onCancel }: NewProductFormPr
     try {
       onSuccess?.(data);
     } catch (error) {
-      console.error("Error submitting form:", error);
+      // Error handled by caller
     } finally {
       setIsSubmitting(false);
     }

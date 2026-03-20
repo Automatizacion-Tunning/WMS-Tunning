@@ -218,16 +218,11 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
 
   const entryMutation = useMutation({
     mutationFn: async (data: ProductEntryData) => {
-      const response = await fetch("/api/product-entry", {
+      return await apiRequest("/api/product-entry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.message || "Error al ingresar producto");
-      }
-      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -252,16 +247,11 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
 
   const ocEntryMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await fetch("/api/product-entry-oc", {
+      return await apiRequest("/api/product-entry-oc", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.message || "Error al ingresar producto con OC");
-      }
-      return response.json();
     },
     onSuccess: (result: any) => {
       const r = result.receipt;
@@ -294,15 +284,11 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
   // Mutación para crear centro de costo
   const createCostCenterMutation = useMutation({
     mutationFn: async (data: { costCenter: string; location?: string }) => {
-      const response = await fetch("/api/cost-centers", {
+      return await apiRequest("/api/cost-centers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!response.ok) {
-        throw new Error("Error al crear centro de costo");
-      }
-      return response.json();
     },
   });
 

@@ -169,14 +169,16 @@ export class DatabaseStorage implements IStorage {
 
   async updateUser(id: number, updateData: Partial<InsertUser>): Promise<User | undefined> {
     const [user] = await db.update(users)
-      .set(updateData)
+      .set({ ...updateData, updatedAt: new Date() })
       .where(eq(users.id, id))
       .returning();
     return user || undefined;
   }
 
   async getAllUsers(): Promise<User[]> {
-    return await db.select().from(users).orderBy(asc(users.username));
+    return await db.select().from(users)
+      .where(eq(users.isActive, true))
+      .orderBy(asc(users.username));
   }
 
   async getUsersByRole(role: string): Promise<User[]> {
@@ -248,11 +250,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateWarehouse(id: number, updateData: Partial<InsertWarehouse>): Promise<Warehouse | undefined> {
-    console.log("📦 updateWarehouse ID:", id);
-    console.log("📦 updateWarehouse updateData:", JSON.stringify(updateData, null, 2));
-    console.log("📦 updateData keys:", Object.keys(updateData));
-    console.log("📦 updateData values:", Object.values(updateData));
-    
     const [warehouse] = await db.update(warehouses)
       .set(updateData)
       .where(eq(warehouses.id, id))
@@ -365,7 +362,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateProduct(id: number, updateData: Partial<InsertProduct>): Promise<Product | undefined> {
     const [product] = await db.update(products)
-      .set(updateData)
+      .set({ ...updateData, updatedAt: new Date() })
       .where(eq(products.id, id))
       .returning();
     return product || undefined;
@@ -454,17 +451,23 @@ export class DatabaseStorage implements IStorage {
 
   // Inventory Movements
   async createInventoryMovement(movement: InsertInventoryMovement): Promise<InventoryMovement> {
-    const [created] = await db.insert(inventoryMovements).values(movement).returning();
-    
-    // Update inventory quantity
+    // Validate sufficient stock for outbound movements
     const currentInventory = await this.getInventory(movement.productId, movement.warehouseId);
     const currentQuantity = currentInventory?.quantity || 0;
-    const newQuantity = movement.movementType === 'in' 
-      ? currentQuantity + movement.quantity 
+
+    if (movement.movementType === 'out' && currentQuantity < movement.quantity) {
+      throw new Error(`Stock insuficiente: disponible ${currentQuantity}, solicitado ${movement.quantity}`);
+    }
+
+    const [created] = await db.insert(inventoryMovements).values(movement).returning();
+
+    // Update inventory quantity
+    const newQuantity = movement.movementType === 'in'
+      ? currentQuantity + movement.quantity
       : currentQuantity - movement.quantity;
-    
-    await this.updateInventory(movement.productId, movement.warehouseId, Math.max(0, newQuantity));
-    
+
+    await this.updateInventory(movement.productId, movement.warehouseId, newQuantity);
+
     return created;
   }
 
@@ -480,6 +483,9 @@ export class DatabaseStorage implements IStorage {
       reason: inventoryMovements.reason,
       userId: inventoryMovements.userId,
       transferOrderId: inventoryMovements.transferOrderId,
+      purchaseOrderNumber: inventoryMovements.purchaseOrderNumber,
+      purchaseOrderLine: inventoryMovements.purchaseOrderLine,
+      purchaseOrderCodprod: inventoryMovements.purchaseOrderCodprod,
       createdAt: inventoryMovements.createdAt,
       product: products,
       warehouse: warehouses,
@@ -505,6 +511,9 @@ export class DatabaseStorage implements IStorage {
       reason: inventoryMovements.reason,
       userId: inventoryMovements.userId,
       transferOrderId: inventoryMovements.transferOrderId,
+      purchaseOrderNumber: inventoryMovements.purchaseOrderNumber,
+      purchaseOrderLine: inventoryMovements.purchaseOrderLine,
+      purchaseOrderCodprod: inventoryMovements.purchaseOrderCodprod,
       createdAt: inventoryMovements.createdAt,
       product: products,
       warehouse: warehouses,
@@ -604,7 +613,9 @@ export class DatabaseStorage implements IStorage {
 
   // Product Serials
   async createProductSerial(serial: InsertProductSerial): Promise<ProductSerial> {
-    const [newSerial] = await db.insert(productSerials).values(serial).returning();
+    const [newSerial] = await db.insert(productSerials)
+      .values({ ...serial, serialNumber: serial.serialNumber.trim() })
+      .returning();
     return newSerial;
   }
 
@@ -619,10 +630,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async validateSerialNumber(productId: number, serialNumber: string): Promise<boolean> {
+    const trimmed = serialNumber.trim();
     const [existing] = await db.select().from(productSerials)
       .where(and(
         eq(productSerials.productId, productId),
-        eq(productSerials.serialNumber, serialNumber)
+        eq(productSerials.serialNumber, trimmed)
       ));
     return !existing; // Retorna true si NO existe (es válido)
   }
@@ -683,18 +695,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTransferOrders(userId?: number, role?: string, costCenter?: string): Promise<TransferOrderWithDetails[]> {
-    // Basic implementation to get app running
-    const orders = await db.select().from(transferOrders).orderBy(desc(transferOrders.createdAt));
-    
-    // Create mock data structure for now
-    return orders.map(order => ({
-      ...order,
-      product: { id: 1, name: "Mock Product", sku: "MOCK-001", barcode: null, description: null, productType: "PHYSICAL", requiresSerial: false, isActive: true, createdAt: new Date() },
-      sourceWarehouse: { id: 1, name: "Mock Warehouse", location: "Mock Location", costCenter: "PRINCIPAL", parentWarehouseId: null, warehouseType: "PRINCIPAL", subWarehouseType: null, isActive: true, createdAt: new Date() },
-      destinationWarehouse: { id: 1, name: "Mock Warehouse", location: "Mock Location", costCenter: "PRINCIPAL", parentWarehouseId: null, warehouseType: "PRINCIPAL", subWarehouseType: null, isActive: true, createdAt: new Date() },
-      requester: { id: 1, username: "mock_user", password: "", role: "user", isActive: true, createdAt: new Date() },
-      projectManager: undefined
-    })) as TransferOrderWithDetails[];
+    const results = await db
+      .select()
+      .from(transferOrders)
+      .orderBy(desc(transferOrders.createdAt));
+
+    // Enrich with real data
+    const enriched = await Promise.all(results.map(async (order) => {
+      const product = await this.getProduct(order.productId);
+      const sourceWarehouse = await this.getWarehouse(order.sourceWarehouseId);
+      const destinationWarehouse = await this.getWarehouse(order.destinationWarehouseId);
+      const requester = await this.getUser(order.requesterId);
+
+      return {
+        ...order,
+        product: product || { id: order.productId, name: 'Producto no encontrado' },
+        sourceWarehouse: sourceWarehouse || { id: order.sourceWarehouseId, name: 'Bodega no encontrada' },
+        destinationWarehouse: destinationWarehouse || { id: order.destinationWarehouseId, name: 'Bodega no encontrada' },
+        requester: requester ? { id: requester.id, username: requester.username, firstName: requester.firstName, lastName: requester.lastName } : { id: order.requesterId, username: 'Usuario no encontrado' },
+      };
+    }));
+
+    return enriched as TransferOrderWithDetails[];
   }
 
   async getTransferOrder(id: number): Promise<TransferOrderWithDetails | undefined> {
@@ -702,56 +724,90 @@ export class DatabaseStorage implements IStorage {
 
     if (!result) return undefined;
 
+    const product = await this.getProduct(result.productId);
+    const sourceWarehouse = await this.getWarehouse(result.sourceWarehouseId);
+    const destinationWarehouse = await this.getWarehouse(result.destinationWarehouseId);
+    const requester = await this.getUser(result.requesterId);
+
     return {
       ...result,
-      product: { id: 1, name: "Mock Product", sku: "MOCK-001", barcode: null, description: null, productType: "PHYSICAL", requiresSerial: false, isActive: true, createdAt: new Date() },
-      sourceWarehouse: { id: 1, name: "Mock Warehouse", location: "Mock Location", costCenter: "PRINCIPAL", parentWarehouseId: null, warehouseType: "PRINCIPAL", subWarehouseType: null, isActive: true, createdAt: new Date() },
-      destinationWarehouse: { id: 1, name: "Mock Warehouse", location: "Mock Location", costCenter: "PRINCIPAL", parentWarehouseId: null, warehouseType: "PRINCIPAL", subWarehouseType: null, isActive: true, createdAt: new Date() },
-      requester: { id: 1, username: "mock_user", password: "", role: "user", isActive: true, createdAt: new Date() },
-      projectManager: undefined
+      product: product || { id: result.productId, name: 'Producto no encontrado' },
+      sourceWarehouse: sourceWarehouse || { id: result.sourceWarehouseId, name: 'Bodega no encontrada' },
+      destinationWarehouse: destinationWarehouse || { id: result.destinationWarehouseId, name: 'Bodega no encontrada' },
+      requester: requester ? { id: requester.id, username: requester.username, firstName: requester.firstName, lastName: requester.lastName } : { id: result.requesterId, username: 'Usuario no encontrado' },
     } as TransferOrderWithDetails;
   }
 
   async updateTransferOrderStatus(id: number, status: string, projectManagerId?: number): Promise<TransferOrder | undefined> {
+    // If approved, execute the transfer with error recovery
+    if (status === 'approved') {
+      const [updatedOrder] = await db.update(transferOrders)
+        .set({
+          status,
+          projectManagerId,
+          updatedAt: new Date()
+        })
+        .where(eq(transferOrders.id, id))
+        .returning();
+
+      if (updatedOrder) {
+        const order = await this.getTransferOrder(id);
+        if (order) {
+          try {
+            // Create OUT movement from source
+            await this.createInventoryMovement({
+              productId: order.productId,
+              warehouseId: order.sourceWarehouseId,
+              movementType: 'out',
+              quantity: order.quantity,
+              transferOrderId: id,
+              reason: `Traspaso salida - Orden ${order.orderNumber}`,
+              userId: projectManagerId || 1,
+            });
+
+            // Create IN movement to destination
+            await this.createInventoryMovement({
+              productId: order.productId,
+              warehouseId: order.destinationWarehouseId,
+              movementType: 'in',
+              quantity: order.quantity,
+              transferOrderId: id,
+              reason: `Traspaso entrada - Orden ${order.orderNumber}`,
+              userId: projectManagerId || 1,
+            });
+
+            // Update serial numbers to new warehouse
+            await db.update(productSerials)
+              .set({ warehouseId: order.destinationWarehouseId })
+              .where(
+                and(
+                  eq(productSerials.productId, order.productId),
+                  eq(productSerials.warehouseId, order.sourceWarehouseId),
+                  eq(productSerials.status, 'active')
+                )
+              );
+          } catch (error) {
+            // Revert status on failure
+            await db.update(transferOrders)
+              .set({ status: 'pending', updatedAt: new Date() })
+              .where(eq(transferOrders.id, id));
+            throw error;
+          }
+        }
+      }
+
+      return updatedOrder || undefined;
+    }
+
+    // Non-approved status updates (rejected, cancelled, etc.)
     const [updatedOrder] = await db.update(transferOrders)
-      .set({ 
+      .set({
         status,
         projectManagerId,
         updatedAt: new Date()
       })
       .where(eq(transferOrders.id, id))
       .returning();
-
-    // If approved, execute the transfer
-    if (status === 'approved' && updatedOrder) {
-      const order = await this.getTransferOrder(id);
-      if (order) {
-        // Create inventory movements for the transfer
-        await this.createInventoryMovement({
-          productId: order.productId,
-          warehouseId: order.sourceWarehouseId,
-          movementType: 'out',
-          quantity: order.quantity,
-          transferOrderId: id,
-          reason: `Traspaso salida - Orden ${order.orderNumber}`,
-          userId: projectManagerId || 1,
-        });
-
-        await this.createInventoryMovement({
-          productId: order.productId,
-          warehouseId: order.destinationWarehouseId,
-          movementType: 'in',
-          quantity: order.quantity,
-          transferOrderId: id,
-          reason: `Traspaso entrada - Orden ${order.orderNumber}`,
-          userId: projectManagerId || 1,
-        });
-
-        // Update inventory quantities
-        await this.updateInventory(order.productId, order.sourceWarehouseId, -order.quantity);
-        await this.updateInventory(order.productId, order.destinationWarehouseId, order.quantity);
-      }
-    }
 
     return updatedOrder || undefined;
   }
@@ -766,8 +822,10 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
 
     if (latestOrder) {
-      const currentNumber = parseInt(latestOrder.orderNumber.split('-')[1]);
-      return `OT-${(currentNumber + 1).toString().padStart(3, '0')}`;
+      const lastNum = latestOrder.orderNumber
+        ? parseInt(latestOrder.orderNumber.split('-')[1]) || 0
+        : 0;
+      return `OT-${(lastNum + 1).toString().padStart(3, '0')}`;
     }
 
     return 'OT-001';
@@ -822,6 +880,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteUnit(id: number): Promise<boolean> {
+    const productsUsingUnit = await db.select({ count: count() })
+      .from(products)
+      .where(and(eq(products.unitId, id), eq(products.isActive, true)));
+    if (productsUsingUnit[0].count > 0) {
+      throw new Error("No se puede eliminar: hay productos activos usando esta unidad");
+    }
     const result = await db.update(units)
       .set({ isActive: false })
       .where(eq(units.id, id));
@@ -852,6 +916,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCategory(id: number): Promise<boolean> {
+    const productsUsingCategory = await db.select({ count: count() })
+      .from(products)
+      .where(and(eq(products.categoryId, id), eq(products.isActive, true)));
+    if (productsUsingCategory[0].count > 0) {
+      throw new Error("No se puede eliminar: hay productos activos usando esta categoría");
+    }
     const result = await db.update(categories)
       .set({ isActive: false })
       .where(eq(categories.id, id));
@@ -882,6 +952,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteBrand(id: number): Promise<boolean> {
+    const productsUsingBrand = await db.select({ count: count() })
+      .from(products)
+      .where(and(eq(products.brandId, id), eq(products.isActive, true)));
+    if (productsUsingBrand[0].count > 0) {
+      throw new Error("No se puede eliminar: hay productos activos usando esta marca");
+    }
     const result = await db.update(brands)
       .set({ isActive: false })
       .where(eq(brands.id, id));
@@ -1094,24 +1170,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateRolePermissions(roleId: number, permissionKeys: string[]): Promise<void> {
-    // Delete all existing permissions for this role
-    await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
+    await db.transaction(async (tx) => {
+      // Delete all existing permissions for this role
+      await tx.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
 
-    if (permissionKeys.length === 0) return;
+      if (permissionKeys.length > 0) {
+        // Find permission IDs by keys
+        const perms = await tx.select().from(permissions)
+          .where(inArray(permissions.key, permissionKeys));
 
-    // Find permission IDs by keys
-    const perms = await db.select().from(permissions)
-      .where(inArray(permissions.key, permissionKeys));
-
-    if (perms.length === 0) return;
-
-    // Insert new role-permission associations
-    await db.insert(rolePermissions).values(
-      perms.map((p) => ({
-        roleId,
-        permissionId: p.id,
-      }))
-    );
+        if (perms.length > 0) {
+          // Insert new role-permission associations
+          await tx.insert(rolePermissions).values(
+            perms.map((p) => ({
+              roleId,
+              permissionId: p.id,
+            }))
+          );
+        }
+      }
+    });
   }
 
   async getAllPermissions(): Promise<Permission[]> {

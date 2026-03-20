@@ -11,6 +11,11 @@ const pageNames: Record<string, { title: string; subtitle: string }> = {
   "/inventory/stock-entry": { title: "Ingreso de Productos", subtitle: "Gestión de productos por centro de costo" },
   "/users": { title: "Usuarios", subtitle: "Gestión de usuarios" },
   "/users/permissions": { title: "Permisos", subtitle: "Control de permisos" },
+  "/cost-centers": { title: "Centros de Costo", subtitle: "Gestión de centros de costo" },
+  "/orders/purchase-order": { title: "Órdenes de Compra", subtitle: "Recepción de productos por OC" },
+  "/orders/transfer-orders": { title: "Órdenes de Traspaso", subtitle: "Gestión de traspasos entre bodegas" },
+  "/roles": { title: "Roles y Permisos", subtitle: "Gestión de roles del sistema" },
+  "/products/management": { title: "Gestión de Productos", subtitle: "Administración del catálogo" },
 };
 
 export default function Header() {

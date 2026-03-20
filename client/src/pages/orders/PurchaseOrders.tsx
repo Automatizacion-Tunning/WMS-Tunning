@@ -53,7 +53,7 @@ export default function PurchaseOrders() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterCC, setFilterCC] = useState("all");
   const [filterEstado, setFilterEstado] = useState("all");
-  const [filterTipo, setFilterTipo] = useState("all");
+  const [filterTipo, setFilterTipo] = useState("suministros");
   const [page, setPage] = useState(1);
 
   // Debounce search

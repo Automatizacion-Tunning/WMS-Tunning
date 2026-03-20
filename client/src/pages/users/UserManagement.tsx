@@ -281,7 +281,11 @@ export default function UserManagement() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => deleteMutation.mutate(user.id)}
+                        onClick={() => {
+                          if (window.confirm("¿Está seguro que desea eliminar este usuario?")) {
+                            deleteMutation.mutate(user.id);
+                          }
+                        }}
                         disabled={deleteMutation.isPending}
                       >
                         <Trash2 className="w-4 h-4" />

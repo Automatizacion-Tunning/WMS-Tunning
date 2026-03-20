@@ -170,8 +170,6 @@ export const requirePermission = (...permissionKeys: string[]) => {
       if (!hasPermission) {
         return res.status(403).json({
           message: "No tiene permisos para realizar esta accion",
-          required: permissionKeys,
-          current: authCtx.permissions,
         });
       }
 
@@ -210,14 +208,8 @@ export const requireAllPermissions = (...permissionKeys: string[]) => {
       );
 
       if (!hasAll) {
-        const missing = permissionKeys.filter(
-          (key) => !authCtx.permissions.includes(key)
-        );
         return res.status(403).json({
-          message: "No tiene todos los permisos requeridos",
-          required: permissionKeys,
-          missing,
-          current: authCtx.permissions,
+          message: "No tiene permisos para realizar esta accion",
         });
       }
 

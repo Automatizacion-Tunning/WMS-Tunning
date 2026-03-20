@@ -78,35 +78,31 @@ export default function EditProductForm({ product, onSuccess, onCancel }: EditPr
   const onSubmit = async (data: EditProductFormData) => {
     try {
       setIsSubmitting(true);
-      
+
       // Separar precio del resto de datos
       const { currentPrice, ...productData } = data;
-      
-      // Actualizar el producto
-      const response = await apiRequest(`/api/products/${product.id}`, {
+
+      // Actualizar el producto (apiRequest lanza error si la respuesta no es ok)
+      await apiRequest(`/api/products/${product.id}`, {
         method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...productData,
           currentPrice: currentPrice || 0,
         }),
       });
 
-      if (response.ok) {
-        toast({
-          title: "Producto actualizado",
-          description: "El producto ha sido actualizado exitosamente",
-        });
-        
-        // Invalidar cache
-        queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-        
-        // Callback de éxito
-        onSuccess?.();
-      } else {
-        throw new Error("Error al actualizar el producto");
-      }
+      toast({
+        title: "Producto actualizado",
+        description: "El producto ha sido actualizado exitosamente",
+      });
+
+      // Invalidar cache
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+
+      // Callback de éxito
+      onSuccess?.();
     } catch (error) {
-      console.error("Error:", error);
       toast({
         title: "Error",
         description: "No se pudo actualizar el producto. Intente nuevamente.",

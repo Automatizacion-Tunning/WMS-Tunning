@@ -24,11 +24,13 @@ export default function TransferOrders() {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: number; status: string }) => {
-      const response = await apiRequest("PATCH", `/api/transfer-orders/${orderId}/status`, {
-        status,
-        projectManagerId: 1, // TODO: Get from auth context
+      return await apiRequest(`/api/transfer-orders/${orderId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status,
+        }),
       });
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/transfer-orders"] });

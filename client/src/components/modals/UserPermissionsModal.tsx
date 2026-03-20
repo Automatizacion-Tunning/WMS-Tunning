@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { PERMISSIONS, type User, type Warehouse } from "@shared/schema";
+import { type User, type Warehouse } from "@shared/schema";
 
 interface UserPermissionsModalProps {
   user: User | null;
@@ -62,34 +62,37 @@ export default function UserPermissionsModal({ user, onClose, onSuccess }: UserP
 
   const permissionGroups = {
     "Gestión de Usuarios": [
-      { key: PERMISSIONS.MANAGE_USERS, label: "Gestionar usuarios" },
-      { key: PERMISSIONS.VIEW_USERS, label: "Ver usuarios" },
+      { key: "users.manage", label: "Gestionar usuarios" },
+      { key: "users.view", label: "Ver usuarios" },
     ],
     "Gestión de Productos": [
-      { key: PERMISSIONS.CREATE_PRODUCTS, label: "Crear productos" },
-      { key: PERMISSIONS.EDIT_PRODUCTS, label: "Editar productos" },
-      { key: PERMISSIONS.DELETE_PRODUCTS, label: "Eliminar productos" },
-      { key: PERMISSIONS.VIEW_PRODUCTS, label: "Ver productos" },
+      { key: "products.create", label: "Crear productos" },
+      { key: "products.edit", label: "Editar productos" },
+      { key: "products.delete", label: "Eliminar productos" },
+      { key: "products.view", label: "Ver productos" },
     ],
     "Gestión de Inventario": [
-      { key: PERMISSIONS.CREATE_INVENTORY, label: "Crear inventario" },
-      { key: PERMISSIONS.EDIT_INVENTORY, label: "Editar inventario" },
-      { key: PERMISSIONS.VIEW_INVENTORY, label: "Ver inventario" },
+      { key: "inventory.entry", label: "Entrada de inventario" },
+      { key: "inventory.movements", label: "Movimientos de inventario" },
+      { key: "inventory.view", label: "Ver inventario" },
     ],
     "Gestión de Bodegas": [
-      { key: PERMISSIONS.CREATE_WAREHOUSES, label: "Crear bodegas" },
-      { key: PERMISSIONS.EDIT_WAREHOUSES, label: "Editar bodegas" },
-      { key: PERMISSIONS.DELETE_WAREHOUSES, label: "Eliminar bodegas" },
-      { key: PERMISSIONS.VIEW_WAREHOUSES, label: "Ver bodegas" },
+      { key: "warehouses.create", label: "Crear bodegas" },
+      { key: "warehouses.edit", label: "Editar bodegas" },
+      { key: "warehouses.delete", label: "Eliminar bodegas" },
+      { key: "warehouses.view", label: "Ver bodegas" },
     ],
-    "Órdenes de Transferencia": [
-      { key: PERMISSIONS.CREATE_TRANSFER_ORDERS, label: "Crear órdenes" },
-      { key: PERMISSIONS.APPROVE_TRANSFER_ORDERS, label: "Aprobar órdenes" },
-      { key: PERMISSIONS.VIEW_TRANSFER_ORDERS, label: "Ver órdenes" },
+    "Órdenes y Traspasos": [
+      { key: "orders.create_transfers", label: "Crear traspasos" },
+      { key: "orders.approve_transfers", label: "Aprobar traspasos" },
+      { key: "orders.view_transfers", label: "Ver traspasos" },
+      { key: "orders.view_purchase", label: "Ver órdenes de compra" },
+      { key: "orders.entry_oc", label: "Recepción por OC" },
     ],
-    "Dashboard y Reportes": [
-      { key: PERMISSIONS.VIEW_DASHBOARD, label: "Ver dashboard" },
-      { key: PERMISSIONS.VIEW_REPORTS, label: "Ver reportes" },
+    "Dashboard y Roles": [
+      { key: "dashboard.view", label: "Ver dashboard" },
+      { key: "roles.view", label: "Ver roles" },
+      { key: "roles.manage", label: "Gestionar roles" },
     ],
   };
 

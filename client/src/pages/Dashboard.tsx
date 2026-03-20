@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { 
-  Package, 
-  Warehouse, 
-  AlertTriangle, 
+import { useLocation } from "wouter";
+import {
+  Package,
+  Warehouse,
+  AlertTriangle,
   DollarSign,
   TrendingUp,
   CheckCircle,
@@ -19,9 +20,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 import type { InventoryWithDetails } from "@shared/schema";
 
 export default function Dashboard() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
   const { data: metrics, isLoading: metricsLoading } = useQuery({
     queryKey: ["/api/dashboard/metrics"],
   });
@@ -92,7 +97,7 @@ export default function Dashboard() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg font-semibold">Inventario Reciente</CardTitle>
-                <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80 hidden md:inline-flex">
+                <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80 hidden md:inline-flex" onClick={() => setLocation("/inventory/stock-entry")}>
                   Ver todos
                 </Button>
               </div>
@@ -204,15 +209,15 @@ export default function Dashboard() {
               <CardTitle className="text-lg font-semibold">Acciones Rápidas</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button variant="outline" className="w-full justify-start" size="sm">
+              <Button variant="outline" className="w-full justify-start" size="sm" onClick={() => setLocation("/products")}>
                 <Plus className="w-4 h-4 mr-2 text-primary" />
                 Agregar Producto
               </Button>
-              <Button variant="outline" className="w-full justify-start" size="sm">
+              <Button variant="outline" className="w-full justify-start" size="sm" onClick={() => setLocation("/warehouses")}>
                 <Warehouse className="w-4 h-4 mr-2 text-green-600" />
                 Nueva Bodega
               </Button>
-              <Button variant="outline" className="w-full justify-start" size="sm">
+              <Button variant="outline" className="w-full justify-start" size="sm" onClick={() => toast({ title: "Próximamente", description: "La generación de reportes estará disponible pronto." })}>
                 <BarChart3 className="w-4 h-4 mr-2 text-purple-600" />
                 Generar Reporte
               </Button>

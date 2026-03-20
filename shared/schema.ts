@@ -11,7 +11,7 @@ export const users = pgTable("users", {
   lastName: varchar("last_name", { length: 100 }),
   email: varchar("email", { length: 255 }).unique(),
   ficha: varchar("ficha", { length: 20 }).unique(), // Número de ficha del trabajador (vinculo con pav_office365)
-  role: varchar("role", { length: 30 }).notNull().default("user"), // 'admin', 'project_manager', 'warehouse_operator', 'user'
+  role: varchar("role", { length: 30 }).notNull().default("sin_acceso"), // 'admin', 'project_manager', 'warehouse_operator', 'viewer', 'sin_acceso'
   costCenter: varchar("cost_center", { length: 100 }), // Centro de costo asignado al usuario
   permissions: text("permissions").array(), // Array de permisos específicos
   managedWarehouses: integer("managed_warehouses").array(), // Array de IDs de bodegas que puede gestionar
@@ -378,10 +378,14 @@ export const insertInventorySchema = createInsertSchema(inventory).omit({
   updatedAt: true,
 });
 
-export const insertInventoryMovementSchema = createInsertSchema(inventoryMovements).omit({
-  id: true,
-  createdAt: true,
-});
+export const insertInventoryMovementSchema = createInsertSchema(inventoryMovements)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    movementType: z.enum(['in', 'out'], {
+      errorMap: () => ({ message: "Tipo de movimiento debe ser 'in' o 'out'" })
+    }),
+    quantity: z.number().min(1, "La cantidad debe ser mayor a 0"),
+  });
 
 export const insertProductPriceSchema = createInsertSchema(productPrices).omit({
   id: true,
@@ -578,39 +582,6 @@ export const stockEntrySchema = z.object({
   reason: z.string().optional(),
 });
 
-// Definición de permisos disponibles
-export const PERMISSIONS = {
-  // Gestión de usuarios
-  MANAGE_USERS: 'manage_users',
-  VIEW_USERS: 'view_users',
-  
-  // Gestión de productos
-  CREATE_PRODUCTS: 'create_products',
-  EDIT_PRODUCTS: 'edit_products',
-  DELETE_PRODUCTS: 'delete_products',
-  VIEW_PRODUCTS: 'view_products',
-  
-  // Gestión de inventario
-  CREATE_INVENTORY: 'create_inventory',
-  EDIT_INVENTORY: 'edit_inventory',
-  VIEW_INVENTORY: 'view_inventory',
-  
-  // Gestión de bodegas
-  CREATE_WAREHOUSES: 'create_warehouses',
-  EDIT_WAREHOUSES: 'edit_warehouses',
-  DELETE_WAREHOUSES: 'delete_warehouses',
-  VIEW_WAREHOUSES: 'view_warehouses',
-  
-  // Órdenes de transferencia
-  CREATE_TRANSFER_ORDERS: 'create_transfer_orders',
-  APPROVE_TRANSFER_ORDERS: 'approve_transfer_orders',
-  VIEW_TRANSFER_ORDERS: 'view_transfer_orders',
-  
-  // Dashboard y reportes
-  VIEW_DASHBOARD: 'view_dashboard',
-  VIEW_REPORTS: 'view_reports',
-} as const;
-
 // Roles predefinidos
 export const USER_ROLES = {
   ADMIN: 'admin',
@@ -628,7 +599,9 @@ export const userFormSchema = z.object({
   lastName: z.string().min(1, "El apellido es requerido"),
   email: z.string().email("Email inválido").optional(),
   ficha: z.string().optional(),
-  role: z.string().min(1, "Debe seleccionar un rol"),
+  role: z.enum(["admin", "project_manager", "warehouse_operator", "viewer", "sin_acceso"], {
+    errorMap: () => ({ message: "Rol inválido" }),
+  }),
   costCenter: z.string().optional(),
   permissions: z.array(z.string()).optional(),
   managedWarehouses: z.array(z.number()).optional(),

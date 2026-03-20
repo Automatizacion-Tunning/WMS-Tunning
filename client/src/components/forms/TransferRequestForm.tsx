@@ -66,8 +66,11 @@ export default function TransferRequestForm({ onSuccess, onCancel }: TransferReq
 
   const transferRequestMutation = useMutation({
     mutationFn: async (data: TransferRequestData) => {
-      const response = await apiRequest("POST", "/api/transfer-orders", data);
-      return response.json();
+      return await apiRequest("/api/transfer-orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/transfer-orders"] });
