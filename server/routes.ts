@@ -125,6 +125,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper: obtener CCs permitidos segun rol del usuario
+  async function getAllowedCostCenters(userId: number): Promise<string[] | undefined> {
+    const user = await storage.getUser(userId);
+    if (!user) return [];
+    // Admin: sin filtro (undefined = todos)
+    if (user.role === 'admin') return undefined;
+    // PM, operator, viewer: derivar de managedWarehouses o fallback a costCenter
+    if (user.managedWarehouses?.length) {
+      return await storage.getCostCentersByWarehouses(user.managedWarehouses);
+    }
+    if (user.costCenter) return [user.costCenter];
+    return [];
+  }
+
+  app.get("/api/dashboard/available-cost-centers", requirePermission("dashboard.view"), async (req: any, res) => {
+    try {
+      const allowed = await getAllowedCostCenters(req.session.userId);
+      if (allowed !== undefined) {
+        return res.json(allowed);
+      }
+      // Admin: todos los CCs activos
+      const all = await storage.getAllActiveCostCenters();
+      res.json(all);
+    } catch (error) {
+      console.error("[dashboard/available-cost-centers] Error:", error);
+      res.status(500).json({ message: "Failed to fetch available cost centers" });
+    }
+  });
+
+  app.get("/api/dashboard/oc-status", requirePermission("dashboard.view"), async (req: any, res) => {
+    try {
+      const allowed = await getAllowedCostCenters(req.session.userId);
+      if (Array.isArray(allowed) && allowed.length === 0) return res.json([]);
+
+      const queryCc = req.query.costCenter as string | undefined;
+      let costCenters: string[] | undefined = allowed;
+
+      if (queryCc) {
+        // Validar que el CC solicitado este dentro de los permitidos
+        if (allowed !== undefined && !allowed.includes(queryCc)) {
+          return res.status(403).json({ message: "No tiene acceso a este centro de costo" });
+        }
+        costCenters = [queryCc];
+      }
+
+      const data = await storage.getDashboardOcStatus(costCenters);
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch OC status" });
+    }
+  });
+
+  app.get("/api/dashboard/warehouse-distribution", requirePermission("dashboard.view"), async (req: any, res) => {
+    try {
+      const allowed = await getAllowedCostCenters(req.session.userId);
+      if (Array.isArray(allowed) && allowed.length === 0) return res.json([]);
+
+      const queryCc = req.query.costCenter as string | undefined;
+      let costCenters: string[] | undefined = allowed;
+
+      if (queryCc) {
+        if (allowed !== undefined && !allowed.includes(queryCc)) {
+          return res.status(403).json({ message: "No tiene acceso a este centro de costo" });
+        }
+        costCenters = [queryCc];
+      }
+
+      const data = await storage.getDashboardWarehouseDistribution(costCenters);
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch warehouse distribution" });
+    }
+  });
+
   app.get("/api/dashboard/recent-inventory", requirePermission("dashboard.view"), async (req, res) => {
     try {
       // TODO: Optimizar con storage.getRecentInventory(10) usando SQL LIMIT en vez de traer todo
@@ -438,6 +512,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: error.message });
       }
       res.status(500).json({ message: "Failed to create inventory movement" });
+    }
+  });
+
+  // Traspaso directo entre bodegas (OUT origen + IN destino)
+  app.post("/api/inventory-transfers", requirePermission("inventory.movements"), async (req: any, res) => {
+    try {
+      const { productId, sourceWarehouseId, destinationWarehouseId, quantity, reason } = req.body;
+
+      if (!productId || !sourceWarehouseId || !destinationWarehouseId || !quantity) {
+        return res.status(400).json({ message: "Faltan campos requeridos" });
+      }
+      if (sourceWarehouseId === destinationWarehouseId) {
+        return res.status(400).json({ message: "La bodega origen y destino no pueden ser la misma" });
+      }
+      if (quantity <= 0) {
+        return res.status(400).json({ message: "La cantidad debe ser mayor a 0" });
+      }
+
+      // Verificar stock antes de ejecutar
+      const currentInventory = await storage.getInventory(productId, sourceWarehouseId);
+      const available = currentInventory?.quantity || 0;
+      if (available < quantity) {
+        return res.status(400).json({
+          message: `Stock insuficiente en bodega origen: disponible ${available}, solicitado ${quantity}`
+        });
+      }
+
+      // Determinar tipo de destino
+      const destWarehouse = await storage.getWarehouse(destinationWarehouseId);
+      if (!destWarehouse) {
+        return res.status(404).json({ message: "Bodega destino no encontrada" });
+      }
+
+      const isIntegrador = destWarehouse.subWarehouseType === 'integrador';
+      const sourceWarehouse = await storage.getWarehouse(sourceWarehouseId);
+      const isCrossCostCenter = sourceWarehouse && destWarehouse.costCenter !== sourceWarehouse.costCenter;
+
+      // Ejecutar OUT de origen
+      const outReason = isIntegrador
+        ? reason || `Salida a integrador - ${destWarehouse.name}`
+        : isCrossCostCenter
+          ? reason || `Salida traspaso a CC ${destWarehouse.costCenter}`
+          : reason || `Traspaso a ${destWarehouse.name}`;
+
+      const outMovement = await storage.createInventoryMovement({
+        productId,
+        warehouseId: sourceWarehouseId,
+        movementType: 'out',
+        quantity,
+        reason: outReason,
+        userId: req.session.userId!,
+      });
+
+      // Si es integrador: solo salida (producto se despacha, no entra a inventario)
+      // Si es otro CC o misma CC: OUT + IN
+      let inMovement = null;
+      if (!isIntegrador) {
+        const inReason = isCrossCostCenter
+          ? reason || `Entrada traspaso desde CC ${sourceWarehouse?.costCenter}`
+          : reason || `Traspaso desde ${sourceWarehouse?.name}`;
+
+        inMovement = await storage.createInventoryMovement({
+          productId,
+          warehouseId: destinationWarehouseId,
+          movementType: 'in',
+          quantity,
+          reason: inReason,
+          userId: req.session.userId!,
+        });
+      }
+
+      res.status(201).json({
+        message: isIntegrador
+          ? "Salida a integrador registrada exitosamente"
+          : "Traspaso realizado exitosamente",
+        outMovement,
+        inMovement,
+        transferred: quantity,
+        type: isIntegrador ? 'dispatch' : 'transfer',
+      });
+    } catch (error: any) {
+      if (error?.message?.includes('Stock insuficiente')) {
+        return res.status(400).json({ message: error.message });
+      }
+      console.error("Error en traspaso:", error);
+      res.status(500).json({ message: "Error al realizar el traspaso" });
     }
   });
 

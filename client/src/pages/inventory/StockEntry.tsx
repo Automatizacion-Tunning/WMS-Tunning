@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Package, ArrowUpCircle, Scan, Info, FileText } from "lucide-react";
-import ProductEntryForm from "@/components/forms/ProductEntryForm";
+import SimpleProductEntryForm from "@/components/forms/SimpleProductEntryForm";
 import type { InventoryMovementWithDetails } from "@shared/schema";
 
 export default function StockEntry() {
@@ -91,7 +91,7 @@ export default function StockEntry() {
                 de barras con el botón SCANNER para buscar el producto automáticamente.
               </DialogDescription>
             </DialogHeader>
-            <ProductEntryForm
+            <SimpleProductEntryForm
               onSuccess={() => setIsCreateDialogOpen(false)}
               onCancel={() => setIsCreateDialogOpen(false)}
             />

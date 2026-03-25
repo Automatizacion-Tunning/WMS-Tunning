@@ -22,6 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import type { InventoryWithDetails } from "@shared/schema";
+import { DashboardChartsSection } from "@/components/dashboard/DashboardCharts";
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
@@ -88,6 +89,9 @@ export default function Dashboard() {
           </>
         )}
       </div>
+
+      {/* Dashboard Charts with CC filter */}
+      <DashboardChartsSection />
 
       {/* Charts and Tables Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">

@@ -582,6 +582,24 @@ export const stockEntrySchema = z.object({
   reason: z.string().optional(),
 });
 
+// Dashboard chart types
+export type DashboardOcStatus = {
+  costCenter: string;
+  totalOrdered: number;
+  totalReceived: number;
+  totalPending: number;
+  lineCount: number;
+};
+
+export type DashboardWarehouseDistribution = {
+  costCenter: string;
+  warehouseName: string;
+  warehouseType: string;
+  subWarehouseType: string | null;
+  totalStock: number;
+  productCount: number;
+};
+
 // Roles predefinidos
 export const USER_ROLES = {
   ADMIN: 'admin',

@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -22,6 +22,7 @@ import TestBarcode from "@/pages/TestBarcode";
 
 function Router() {
   const { isAuthenticated, isLoading, login } = useAuth();
+  const [, navigate] = useLocation();
 
   if (isLoading) {
     return (
@@ -35,7 +36,7 @@ function Router() {
   }
 
   if (!isAuthenticated) {
-    return <Login onLoginSuccess={() => window.location.reload()} />;
+    return <Login onLoginSuccess={(user) => { login(user); navigate("/"); }} />;
   }
 
   return (

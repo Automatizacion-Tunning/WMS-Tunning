@@ -20,7 +20,7 @@ const loginSchema = z.object({
 type LoginData = z.infer<typeof loginSchema>;
 
 interface LoginProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (user: any) => void;
 }
 
 export default function Login({ onLoginSuccess }: LoginProps) {
@@ -51,7 +51,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         title: "Inicio de sesión exitoso",
         description: `Bienvenido, ${data.user.firstName || data.user.username}`,
       });
-      onLoginSuccess();
+      onLoginSuccess(data.user);
     },
     onError: (error: any) => {
       setError(error.message || "Credenciales incorrectas. Intenta nuevamente.");

@@ -16,7 +16,8 @@ import {
   type PurchaseOrderReceipt,
   type InventoryWithDetails, type InventoryMovementWithDetails,
   type ProductWithCurrentPrice, type ProductWithDetails, type TransferOrderWithDetails,
-  type Role, type InsertRole, type Permission, type RoleWithPermissions
+  type Role, type InsertRole, type Permission, type RoleWithPermissions,
+  type DashboardOcStatus, type DashboardWarehouseDistribution
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, sql, inArray, count } from "drizzle-orm";
@@ -143,6 +144,12 @@ export interface IStorage {
   // RBAC - User-Role
   getUsersCountByRole(roleCode: string): Promise<number>;
   assignUserRole(userId: number, roleCode: string): Promise<User | undefined>;
+
+  // Dashboard Charts
+  getCostCentersByWarehouses(warehouseIds: number[]): Promise<string[]>;
+  getAllActiveCostCenters(): Promise<string[]>;
+  getDashboardOcStatus(costCenters?: string[]): Promise<DashboardOcStatus[]>;
+  getDashboardWarehouseDistribution(costCenters?: string[]): Promise<DashboardWarehouseDistribution[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1213,6 +1220,80 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
     return user || undefined;
+  }
+
+  // =====================
+  // Dashboard Charts
+  // =====================
+
+  async getCostCentersByWarehouses(warehouseIds: number[]): Promise<string[]> {
+    if (!warehouseIds.length) return [];
+    const results = await db.selectDistinct({ costCenter: warehouses.costCenter })
+      .from(warehouses)
+      .where(inArray(warehouses.id, warehouseIds));
+    return results.map(r => r.costCenter).filter(Boolean);
+  }
+
+  async getAllActiveCostCenters(): Promise<string[]> {
+    const results = await db.selectDistinct({ costCenter: warehouses.costCenter })
+      .from(warehouses)
+      .where(eq(warehouses.isActive, true))
+      .orderBy(asc(warehouses.costCenter));
+    return results.map(r => r.costCenter).filter(Boolean);
+  }
+
+  async getDashboardOcStatus(costCenters?: string[]): Promise<DashboardOcStatus[]> {
+    const conditions = costCenters?.length
+      ? [inArray(purchaseOrderReceipts.costCenter, costCenters)]
+      : [];
+
+    const results = await db.select({
+      costCenter: purchaseOrderReceipts.costCenter,
+      totalOrdered: sql<number>`coalesce(sum(${purchaseOrderReceipts.orderedQuantity}::numeric), 0)`,
+      totalReceived: sql<number>`coalesce(sum(${purchaseOrderReceipts.receivedQuantity}::numeric), 0)`,
+      totalPending: sql<number>`coalesce(sum(${purchaseOrderReceipts.orderedQuantity}::numeric - ${purchaseOrderReceipts.receivedQuantity}::numeric), 0)`,
+      lineCount: sql<number>`count(distinct ${purchaseOrderReceipts.id})`,
+    })
+    .from(purchaseOrderReceipts)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .groupBy(purchaseOrderReceipts.costCenter);
+
+    return results.map(r => ({
+      costCenter: r.costCenter || 'Sin CC',
+      totalOrdered: Number(r.totalOrdered),
+      totalReceived: Number(r.totalReceived),
+      totalPending: Number(r.totalPending),
+      lineCount: Number(r.lineCount),
+    }));
+  }
+
+  async getDashboardWarehouseDistribution(costCenters?: string[]): Promise<DashboardWarehouseDistribution[]> {
+    const conditions = [eq(warehouses.isActive, true)];
+    if (costCenters?.length) {
+      conditions.push(inArray(warehouses.costCenter, costCenters));
+    }
+
+    const results = await db.select({
+      costCenter: warehouses.costCenter,
+      warehouseName: warehouses.name,
+      warehouseType: warehouses.warehouseType,
+      subWarehouseType: warehouses.subWarehouseType,
+      totalStock: sql<number>`coalesce(sum(${inventory.quantity}), 0)`,
+      productCount: sql<number>`count(distinct ${inventory.productId})`,
+    })
+    .from(inventory)
+    .innerJoin(warehouses, eq(inventory.warehouseId, warehouses.id))
+    .where(and(...conditions))
+    .groupBy(warehouses.costCenter, warehouses.name, warehouses.warehouseType, warehouses.subWarehouseType);
+
+    return results.map(r => ({
+      costCenter: r.costCenter,
+      warehouseName: r.warehouseName,
+      warehouseType: r.warehouseType,
+      subWarehouseType: r.subWarehouseType,
+      totalStock: Number(r.totalStock),
+      productCount: Number(r.productCount),
+    }));
   }
 }
 

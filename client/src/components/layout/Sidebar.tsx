@@ -62,7 +62,7 @@ function SidebarContent() {
 
   const productNav: NavItem[] = [];
   if (can("products.view")) productNav.push({ name: "Gestión", href: "/products", icon: Package });
-  if (can("products.view")) productNav.push({ name: "Alta/Baja", href: "/products/movements", icon: PlusCircle });
+  if (can("products.view")) productNav.push({ name: "Traspasos", href: "/products/movements", icon: PlusCircle });
 
   const inventoryNav: NavItem[] = [];
   if (can("inventory.entry")) inventoryNav.push({ name: "Ingreso de Productos", href: "/inventory/stock-entry", icon: ArrowUpCircle });
