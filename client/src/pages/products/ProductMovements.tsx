@@ -5,31 +5,37 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, ArrowRightLeft, Package, TrendingUp, TrendingDown, Warehouse, Building2 } from "lucide-react";
+import { ArrowRight, ArrowRightLeft, Package, TrendingUp, TrendingDown, Warehouse, Building2, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { InventoryMovementWithDetails, InventoryWithDetails } from "@shared/schema";
+
+interface TransferItem {
+  id: number; // UI key
+  productId: number;
+  quantity: number;
+}
+
+let nextItemId = 1;
 
 export default function ProductMovements() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // Form state
-  const [productId, setProductId] = useState(0);
   const [sourceWarehouseId, setSourceWarehouseId] = useState(0);
   const [sameCostCenter, setSameCostCenter] = useState(true);
   const [destinationWarehouseId, setDestinationWarehouseId] = useState(0);
-  const [quantity, setQuantity] = useState(1);
+  const [items, setItems] = useState<TransferItem[]>([]);
   const [reason, setReason] = useState("");
 
-  const { data: inventoryData = [], isLoading: inventoryLoading } = useQuery<InventoryWithDetails[]>({
+  const { data: inventoryData = [] } = useQuery<InventoryWithDetails[]>({
     queryKey: ["/api/inventory"],
   });
 
-  const { data: warehouses = [], isLoading: warehousesLoading } = useQuery<any[]>({
+  const { data: warehouses = [] } = useQuery<any[]>({
     queryKey: ["/api/warehouses"],
   });
 
@@ -37,87 +43,103 @@ export default function ProductMovements() {
     queryKey: ["/api/inventory-movements"],
   });
 
-  // Productos que tienen stock en al menos una bodega
-  const productsWithStock = useMemo(() => {
-    const map = new Map<number, { id: number; name: string; sku: string | null }>();
+  // Bodegas con stock (para origen)
+  const sourceBodegas = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; costCenter: string; productCount: number }>();
     inventoryData.filter(inv => inv.quantity > 0).forEach(inv => {
-      if (!map.has(inv.productId)) {
-        map.set(inv.productId, { id: inv.product.id, name: inv.product.name, sku: inv.product.sku });
+      const existing = map.get(inv.warehouseId);
+      if (existing) {
+        existing.productCount++;
+      } else {
+        map.set(inv.warehouseId, {
+          id: inv.warehouse.id,
+          name: inv.warehouse.name,
+          costCenter: (inv.warehouse as any).costCenter,
+          productCount: 1,
+        });
       }
     });
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    return Array.from(map.values());
   }, [inventoryData]);
 
-  // Bodegas donde el producto seleccionado tiene stock (para origen)
-  const sourceBodegas = useMemo(() => {
-    if (!productId) return [];
-    return inventoryData
-      .filter(inv => inv.productId === productId && inv.quantity > 0)
-      .map(inv => ({
-        id: inv.warehouse.id,
-        name: inv.warehouse.name,
-        costCenter: (inv.warehouse as any).costCenter,
-        stock: inv.quantity,
-      }));
-  }, [productId, inventoryData]);
-
-  // Centro de costo de la bodega origen
+  // CC de la bodega origen
   const sourceCostCenter = useMemo(() => {
     return sourceBodegas.find(b => b.id === sourceWarehouseId)?.costCenter || "";
   }, [sourceWarehouseId, sourceBodegas]);
 
-  // Bodegas destino filtradas por mismo/distinto CC
+  // Bodegas destino filtradas
   const destinationBodegas = useMemo(() => {
     if (!sourceWarehouseId) return [];
     return (warehouses as any[])
       .filter((w: any) => {
         if (w.id === sourceWarehouseId) return false;
         if (w.isActive === false) return false;
-        if (sameCostCenter) {
-          return w.costCenter === sourceCostCenter;
-        } else {
-          return w.costCenter !== sourceCostCenter;
-        }
+        return sameCostCenter ? w.costCenter === sourceCostCenter : w.costCenter !== sourceCostCenter;
       })
-      .map((w: any) => ({
-        id: w.id,
-        name: w.name,
-        costCenter: w.costCenter,
-      }));
+      .map((w: any) => ({ id: w.id, name: w.name, costCenter: w.costCenter }));
   }, [sourceWarehouseId, warehouses, sameCostCenter, sourceCostCenter]);
 
-  // Stock disponible en bodega origen
-  const availableStock = useMemo(() => {
-    const inv = sourceBodegas.find(b => b.id === sourceWarehouseId);
-    return inv?.stock || 0;
-  }, [sourceWarehouseId, sourceBodegas]);
+  // Productos con stock en la bodega origen
+  const productsInSource = useMemo(() => {
+    if (!sourceWarehouseId) return [];
+    return inventoryData
+      .filter(inv => inv.warehouseId === sourceWarehouseId && inv.quantity > 0)
+      .map(inv => ({
+        productId: inv.product.id,
+        name: inv.product.name,
+        sku: inv.product.sku,
+        stock: inv.quantity,
+      }));
+  }, [sourceWarehouseId, inventoryData]);
 
-  // Detectar si destino es integrador (salida sin entrada)
+  // Productos ya seleccionados (para excluirlos del select)
+  const selectedProductIds = useMemo(() => new Set(items.map(i => i.productId)), [items]);
+
+  // Productos disponibles para agregar (no seleccionados aún)
+  const availableProducts = useMemo(() => {
+    return productsInSource.filter(p => !selectedProductIds.has(p.productId));
+  }, [productsInSource, selectedProductIds]);
+
+  // Destino es integrador?
   const isDestinationIntegrador = useMemo(() => {
     if (!destinationWarehouseId) return false;
     const dest = (warehouses as any[]).find((w: any) => w.id === destinationWarehouseId);
     return dest?.subWarehouseType === 'integrador';
   }, [destinationWarehouseId, warehouses]);
 
-  // Reset cascading fields
-  const handleProductChange = (val: string) => {
-    setProductId(parseInt(val));
-    setSourceWarehouseId(0);
-    setSameCostCenter(true);
-    setDestinationWarehouseId(0);
-    setQuantity(1);
-  };
-
+  // Handlers
   const handleSourceChange = (val: string) => {
     setSourceWarehouseId(parseInt(val));
     setSameCostCenter(true);
     setDestinationWarehouseId(0);
-    setQuantity(1);
+    setItems([]);
+    setReason("");
   };
 
   const handleToggleCostCenter = (same: boolean) => {
     setSameCostCenter(same);
     setDestinationWarehouseId(0);
+  };
+
+  const handleDestinationChange = (val: string) => {
+    setDestinationWarehouseId(parseInt(val));
+    setItems([]);
+  };
+
+  const handleAddItem = () => {
+    setItems([...items, { id: nextItemId++, productId: 0, quantity: 1 }]);
+  };
+
+  const handleRemoveItem = (id: number) => {
+    setItems(items.filter(i => i.id !== id));
+  };
+
+  const handleItemProductChange = (id: number, productId: number) => {
+    setItems(items.map(i => i.id === id ? { ...i, productId, quantity: 1 } : i));
+  };
+
+  const handleItemQuantityChange = (id: number, quantity: number, max: number) => {
+    setItems(items.map(i => i.id === id ? { ...i, quantity: Math.min(Math.max(1, quantity), max) } : i));
   };
 
   // Mutation
@@ -132,19 +154,15 @@ export default function ProductMovements() {
     onSuccess: (result: any) => {
       toast({
         title: result.type === 'dispatch' ? "Salida registrada" : "Traspaso realizado",
-        description: result.type === 'dispatch'
-          ? `Se despacharon ${result.transferred} unidades a integrador.`
-          : `Se trasladaron ${result.transferred} unidades exitosamente.`,
+        description: `${result.totalItems} producto(s) movido(s) exitosamente.`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
       queryClient.invalidateQueries({ queryKey: ["/api/inventory-movements"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/metrics"] });
-      // Reset form
-      setProductId(0);
       setSourceWarehouseId(0);
       setSameCostCenter(true);
       setDestinationWarehouseId(0);
-      setQuantity(1);
+      setItems([]);
       setReason("");
     },
     onError: (error: any) => {
@@ -158,300 +176,344 @@ export default function ProductMovements() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!productId || !sourceWarehouseId || !destinationWarehouseId || quantity < 1) return;
+    const validItems = items.filter(i => i.productId && i.quantity >= 1);
+    if (!sourceWarehouseId || !destinationWarehouseId || validItems.length === 0) return;
     transferMutation.mutate({
-      productId,
       sourceWarehouseId,
       destinationWarehouseId,
-      quantity,
+      items: validItems.map(i => ({ productId: i.productId, quantity: i.quantity })),
       reason: reason || undefined,
     });
   };
 
-  const canSubmit = productId && sourceWarehouseId && destinationWarehouseId && quantity >= 1 && quantity <= availableStock && !transferMutation.isPending;
+  const validItems = items.filter(i => i.productId && i.quantity >= 1);
+  const canSubmit = sourceWarehouseId && destinationWarehouseId && validItems.length > 0 && !transferMutation.isPending;
 
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Traspaso de Productos</h1>
+        <h1 className="text-2xl font-bold">Traspaso de Bodega</h1>
         <p className="text-muted-foreground">Mueve productos entre bodegas y centros de costo</p>
       </div>
 
-      <div className="space-y-6">
-        {/* Transfer Form */}
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ArrowRightLeft className="w-5 h-5" />
-                Nuevo Traspaso
-              </CardTitle>
-              <CardDescription>Selecciona producto, origen y destino</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Producto */}
+      {/* Transfer Form */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ArrowRightLeft className="w-5 h-5" />
+            Nuevo Traspaso
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Fila 1: Origen, Toggle CC, Destino */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Bodega Origen */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Warehouse className="w-4 h-4" />
+                  Bodega Origen
+                </label>
+                <Select value={sourceWarehouseId ? sourceWarehouseId.toString() : ""} onValueChange={handleSourceChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar bodega" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sourceBodegas.map((b) => (
+                      <SelectItem key={b.id} value={b.id.toString()}>
+                        {b.name} — {b.costCenter} ({b.productCount} prod.)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Toggle CC */}
+              {sourceWarehouseId > 0 && (
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium flex items-center gap-2">
-                    <Package className="w-4 h-4" />
-                    Producto
+                    <Building2 className="w-4 h-4" />
+                    Destino
                   </label>
-                  <Select value={productId ? productId.toString() : ""} onValueChange={handleProductChange}>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCostCenter(true)}
+                      className={`p-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                        sameCostCenter
+                          ? 'bg-blue-600 border-blue-500 text-white'
+                          : 'border-border text-muted-foreground hover:bg-muted/50'
+                      }`}
+                    >
+                      Mismo CC
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCostCenter(false)}
+                      className={`p-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                        !sameCostCenter
+                          ? 'bg-blue-600 border-blue-500 text-white'
+                          : 'border-border text-muted-foreground hover:bg-muted/50'
+                      }`}
+                    >
+                      Otro CC
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Bodega Destino */}
+              {sourceWarehouseId > 0 && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <ArrowRight className="w-4 h-4" />
+                    Bodega Destino
+                  </label>
+                  <Select value={destinationWarehouseId ? destinationWarehouseId.toString() : ""} onValueChange={handleDestinationChange}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar producto" />
+                      <SelectValue placeholder="Seleccionar destino" />
                     </SelectTrigger>
                     <SelectContent>
-                      {productsWithStock.map((p) => (
-                        <SelectItem key={p.id} value={p.id.toString()}>
-                          {p.name} {p.sku ? `(${p.sku})` : ""}
+                      {destinationBodegas.map((b) => (
+                        <SelectItem key={b.id} value={b.id.toString()}>
+                          {b.name} — {b.costCenter}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">Solo productos con stock disponible</p>
+                </div>
+              )}
+
+              {/* Motivo */}
+              {destinationWarehouseId > 0 && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Motivo (Opcional)</label>
+                  <Input
+                    placeholder="Descripcion del traspaso..."
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Indicador integrador */}
+            {destinationWarehouseId > 0 && isDestinationIntegrador && (
+              <div className="p-3 bg-amber-950/40 border border-amber-800 rounded-lg">
+                <div className="flex items-center gap-2 text-xs">
+                  <TrendingDown className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="text-amber-200 font-medium">Salida a Integrador</span>
+                  <span className="text-amber-400/80">— Los productos saldran del inventario de {sourceCostCenter}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Tabla de productos */}
+            {destinationWarehouseId > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Package className="w-4 h-4" />
+                    Productos a traspasar
+                  </label>
+                  {availableProducts.length > 0 && (
+                    <Button type="button" variant="outline" size="sm" onClick={handleAddItem}>
+                      <Plus className="w-4 h-4 mr-1" />
+                      Agregar producto
+                    </Button>
+                  )}
                 </div>
 
-                {/* Bodega Origen */}
-                {productId > 0 && (
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <Warehouse className="w-4 h-4" />
-                      Bodega Origen
-                    </label>
-                    <Select value={sourceWarehouseId ? sourceWarehouseId.toString() : ""} onValueChange={handleSourceChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar bodega origen" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {sourceBodegas.map((b) => (
-                          <SelectItem key={b.id} value={b.id.toString()}>
-                            {b.name} — {b.costCenter} ({b.stock} uds)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                {items.length === 0 ? (
+                  <div className="border border-dashed rounded-lg p-6 text-center">
+                    <Package className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
+                    <p className="text-sm text-muted-foreground mb-3">No hay productos agregados</p>
+                    {availableProducts.length > 0 ? (
+                      <Button type="button" variant="outline" size="sm" onClick={handleAddItem}>
+                        <Plus className="w-4 h-4 mr-1" />
+                        Agregar producto
+                      </Button>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">No hay productos con stock en esta bodega</p>
+                    )}
                   </div>
-                )}
-
-                {/* Toggle mismo CC / otro CC */}
-                {sourceWarehouseId > 0 && (
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <Building2 className="w-4 h-4" />
-                      Destino del traspaso
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleCostCenter(true)}
-                        className={`p-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                          sameCostCenter
-                            ? 'bg-blue-600 border-blue-500 text-white'
-                            : 'border-border text-muted-foreground hover:bg-muted/50'
-                        }`}
-                      >
-                        Mismo CC
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleCostCenter(false)}
-                        className={`p-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                          !sameCostCenter
-                            ? 'bg-blue-600 border-blue-500 text-white'
-                            : 'border-border text-muted-foreground hover:bg-muted/50'
-                        }`}
-                      >
-                        Otro CC
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {sameCostCenter
-                        ? `Bodegas dentro de ${sourceCostCenter}`
-                        : `Bodegas fuera de ${sourceCostCenter}`}
-                    </p>
-                  </div>
-                )}
-
-                {/* Bodega Destino */}
-                {sourceWarehouseId > 0 && (
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <ArrowRight className="w-4 h-4" />
-                      Bodega Destino
-                    </label>
-                    <Select value={destinationWarehouseId ? destinationWarehouseId.toString() : ""} onValueChange={(val) => setDestinationWarehouseId(parseInt(val))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar bodega destino" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {destinationBodegas.map((b) => (
-                          <SelectItem key={b.id} value={b.id.toString()}>
-                            {b.name} — {b.costCenter}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                </div>
-                {/* Resumen visual del traspaso */}
-                {sourceWarehouseId > 0 && destinationWarehouseId > 0 && (
-                  isDestinationIntegrador ? (
-                    <div className="p-3 bg-amber-950/40 border border-amber-800 rounded-lg">
-                      <div className="flex items-center gap-2 text-xs">
-                        <TrendingDown className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span className="text-amber-200 font-medium">Salida a Integrador</span>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="text-left p-3 font-medium">Producto</th>
+                          <th className="text-right p-3 font-medium w-[120px]">Stock</th>
+                          <th className="text-right p-3 font-medium w-[140px]">Cantidad</th>
+                          <th className="text-center p-3 font-medium w-[50px]"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.map((item) => {
+                          const productInfo = productsInSource.find(p => p.productId === item.productId);
+                          const maxQty = productInfo?.stock || 0;
+                          // Available products for this row: unselected + current selection
+                          const rowProducts = productsInSource.filter(
+                            p => !selectedProductIds.has(p.productId) || p.productId === item.productId
+                          );
+                          return (
+                            <tr key={item.id} className="border-b last:border-b-0">
+                              <td className="p-2">
+                                <Select
+                                  value={item.productId ? item.productId.toString() : ""}
+                                  onValueChange={(val) => handleItemProductChange(item.id, parseInt(val))}
+                                >
+                                  <SelectTrigger className="border-0 bg-transparent shadow-none">
+                                    <SelectValue placeholder="Seleccionar producto..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {rowProducts.map((p) => (
+                                      <SelectItem key={p.productId} value={p.productId.toString()}>
+                                        {p.name} {p.sku ? `(${p.sku})` : ""}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              <td className="p-2 text-right font-mono text-muted-foreground">
+                                {productInfo ? productInfo.stock : "-"}
+                              </td>
+                              <td className="p-2">
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  max={maxQty}
+                                  value={item.quantity}
+                                  onChange={(e) => handleItemQuantityChange(item.id, parseInt(e.target.value) || 0, maxQty)}
+                                  className="text-right w-full"
+                                  disabled={!item.productId}
+                                />
+                              </td>
+                              <td className="p-2 text-center">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRemoveItem(item.id)}
+                                  className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {availableProducts.length > 0 && (
+                      <div className="border-t p-2">
+                        <Button type="button" variant="ghost" size="sm" onClick={handleAddItem} className="w-full text-muted-foreground">
+                          <Plus className="w-4 h-4 mr-1" />
+                          Agregar otro producto
+                        </Button>
                       </div>
-                      <p className="text-xs text-amber-400/80 mt-1">
-                        El producto saldra del inventario de <strong>{sourceCostCenter}</strong>. No se registrara entrada en integrador.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 p-3 bg-blue-950/50 border border-blue-800 rounded-lg text-xs">
-                      <Badge className="font-mono shrink-0 bg-blue-800 text-blue-100 border-blue-700">
-                        {sourceBodegas.find(b => b.id === sourceWarehouseId)?.costCenter}
-                      </Badge>
-                      <ArrowRight className="w-4 h-4 text-blue-400 shrink-0" />
-                      <Badge className="font-mono shrink-0 bg-blue-800 text-blue-100 border-blue-700">
-                        {destinationBodegas.find(b => b.id === destinationWarehouseId)?.costCenter}
-                      </Badge>
-                    </div>
-                  )
+                    )}
+                  </div>
                 )}
 
-                {/* Cantidad, Motivo y Botón en fila */}
-                {destinationWarehouseId > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_auto] gap-4 items-end">
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium">Cantidad</label>
-                      <Input
-                        type="number"
-                        min="1"
-                        max={availableStock}
-                        value={quantity}
-                        onChange={(e) => setQuantity(Math.min(parseInt(e.target.value) || 0, availableStock))}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Disponible: <strong>{availableStock}</strong>
-                      </p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium">Motivo (Opcional)</label>
-                      <Input
-                        placeholder="Descripcion del traspaso..."
-                        value={reason}
-                        onChange={(e) => setReason(e.target.value)}
-                      />
-                    </div>
-                    <Button
-                      type="submit"
-                      disabled={!canSubmit}
-                      className="min-w-[160px]"
-                    >
+                {/* Resumen y botón */}
+                {validItems.length > 0 && (
+                  <div className="flex items-center justify-between pt-2">
+                    <p className="text-sm text-muted-foreground">
+                      {validItems.length} producto(s) — {validItems.reduce((sum, i) => sum + i.quantity, 0)} unidades total
+                    </p>
+                    <Button type="submit" disabled={!canSubmit} className="min-w-[180px]">
                       {transferMutation.isPending
                         ? "Procesando..."
                         : isDestinationIntegrador
-                          ? "Registrar Salida"
-                          : "Realizar Traspaso"}
+                          ? `Registrar Salida (${validItems.length})`
+                          : `Realizar Traspaso (${validItems.length})`}
                     </Button>
                   </div>
                 )}
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+              </div>
+            )}
+          </form>
+        </CardContent>
+      </Card>
 
-        {/* Movement History */}
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Historial de Movimientos</CardTitle>
-              <CardDescription>Ultimos movimientos de inventario</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {movementsLoading ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Skeleton key={i} className="h-16 w-full" />
+      {/* Movement History */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Historial de Movimientos</CardTitle>
+          <CardDescription>Ultimos movimientos de inventario</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {movementsLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : movements.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <ArrowRightLeft className="w-10 h-10 mx-auto mb-3 opacity-40" />
+              <p>No hay movimientos registrados</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Producto</TableHead>
+                    <TableHead>Bodega</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead className="text-right">Cantidad</TableHead>
+                    <TableHead>Motivo</TableHead>
+                    <TableHead>Fecha</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {movements.map((movement: InventoryMovementWithDetails) => (
+                    <TableRow key={movement.id}>
+                      <TableCell>
+                        <div className="flex items-center">
+                          <div className="w-8 h-8 bg-muted rounded-lg flex items-center justify-center mr-3">
+                            <Package className="w-4 h-4 text-muted-foreground" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{movement.product.name}</p>
+                            <p className="text-xs text-muted-foreground">{movement.product.sku}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">{movement.warehouse.name}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={movement.movementType === "in" ? "default" : "destructive"}
+                          className="gap-1"
+                        >
+                          {movement.movementType === "in" ? (
+                            <TrendingUp className="w-3 h-3" />
+                          ) : (
+                            <TrendingDown className="w-3 h-3" />
+                          )}
+                          {movement.movementType === "in" ? "Entrada" : "Salida"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{movement.quantity}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground max-w-[200px]">
+                        <div className="truncate" title={movement.reason || ""}>{movement.reason || "-"}</div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        {new Date(movement.createdAt).toLocaleDateString('es-CL', {
+                          year: 'numeric', month: 'short', day: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                        })}
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </div>
-              ) : movements.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <ArrowRightLeft className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                  <p>No hay movimientos registrados</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Producto</TableHead>
-                        <TableHead>Bodega</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead className="text-right">Cantidad</TableHead>
-                        <TableHead>Motivo</TableHead>
-                        <TableHead>Fecha</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {movements.map((movement: InventoryMovementWithDetails) => (
-                        <TableRow key={movement.id}>
-                          <TableCell>
-                            <div className="flex items-center">
-                              <div className="w-8 h-8 bg-muted rounded-lg flex items-center justify-center mr-3">
-                                <Package className="w-4 h-4 text-muted-foreground" />
-                              </div>
-                              <div>
-                                <p className="font-medium">{movement.product.name}</p>
-                                <p className="text-xs text-muted-foreground">{movement.product.sku}</p>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {movement.warehouse.name}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={movement.movementType === "in" ? "default" : "destructive"}
-                              className="gap-1"
-                            >
-                              {movement.movementType === "in" ? (
-                                <TrendingUp className="w-3 h-3" />
-                              ) : (
-                                <TrendingDown className="w-3 h-3" />
-                              )}
-                              {movement.movementType === "in" ? "Entrada" : "Salida"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {movement.quantity}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground max-w-[200px]">
-                            <div className="truncate" title={movement.reason || ""}>
-                              {movement.reason || "-"}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                            {new Date(movement.createdAt).toLocaleDateString('es-CL', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

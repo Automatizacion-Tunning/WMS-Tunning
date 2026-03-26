@@ -515,28 +515,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Traspaso directo entre bodegas (OUT origen + IN destino)
+  // Traspaso directo entre bodegas — acepta múltiples productos
   app.post("/api/inventory-transfers", requirePermission("inventory.movements"), async (req: any, res) => {
     try {
-      const { productId, sourceWarehouseId, destinationWarehouseId, quantity, reason } = req.body;
+      const { sourceWarehouseId, destinationWarehouseId, items, reason } = req.body;
 
-      if (!productId || !sourceWarehouseId || !destinationWarehouseId || !quantity) {
+      if (!sourceWarehouseId || !destinationWarehouseId || !items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ message: "Faltan campos requeridos" });
       }
       if (sourceWarehouseId === destinationWarehouseId) {
         return res.status(400).json({ message: "La bodega origen y destino no pueden ser la misma" });
       }
-      if (quantity <= 0) {
-        return res.status(400).json({ message: "La cantidad debe ser mayor a 0" });
-      }
 
-      // Verificar stock antes de ejecutar
-      const currentInventory = await storage.getInventory(productId, sourceWarehouseId);
-      const available = currentInventory?.quantity || 0;
-      if (available < quantity) {
-        return res.status(400).json({
-          message: `Stock insuficiente en bodega origen: disponible ${available}, solicitado ${quantity}`
-        });
+      // Validar todos los items antes de ejecutar
+      for (const item of items) {
+        if (!item.productId || !item.quantity || item.quantity <= 0) {
+          return res.status(400).json({ message: "Cada item debe tener productId y cantidad mayor a 0" });
+        }
+        const inv = await storage.getInventory(item.productId, sourceWarehouseId);
+        const available = inv?.quantity || 0;
+        if (available < item.quantity) {
+          return res.status(400).json({
+            message: `Stock insuficiente para producto ID ${item.productId}: disponible ${available}, solicitado ${item.quantity}`
+          });
+        }
       }
 
       // Determinar tipo de destino
@@ -544,52 +546,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!destWarehouse) {
         return res.status(404).json({ message: "Bodega destino no encontrada" });
       }
-
-      const isIntegrador = destWarehouse.subWarehouseType === 'integrador';
       const sourceWarehouse = await storage.getWarehouse(sourceWarehouseId);
+      const isIntegrador = destWarehouse.subWarehouseType === 'integrador';
       const isCrossCostCenter = sourceWarehouse && destWarehouse.costCenter !== sourceWarehouse.costCenter;
 
-      // Ejecutar OUT de origen
-      const outReason = isIntegrador
-        ? reason || `Salida a integrador - ${destWarehouse.name}`
-        : isCrossCostCenter
-          ? reason || `Salida traspaso a CC ${destWarehouse.costCenter}`
-          : reason || `Traspaso a ${destWarehouse.name}`;
+      // Ejecutar movimientos por cada item
+      const results = [];
+      for (const item of items) {
+        const outReason = isIntegrador
+          ? reason || `Salida a integrador - ${destWarehouse.name}`
+          : isCrossCostCenter
+            ? reason || `Salida traspaso a CC ${destWarehouse.costCenter}`
+            : reason || `Traspaso a ${destWarehouse.name}`;
 
-      const outMovement = await storage.createInventoryMovement({
-        productId,
-        warehouseId: sourceWarehouseId,
-        movementType: 'out',
-        quantity,
-        reason: outReason,
-        userId: req.session.userId!,
-      });
-
-      // Si es integrador: solo salida (producto se despacha, no entra a inventario)
-      // Si es otro CC o misma CC: OUT + IN
-      let inMovement = null;
-      if (!isIntegrador) {
-        const inReason = isCrossCostCenter
-          ? reason || `Entrada traspaso desde CC ${sourceWarehouse?.costCenter}`
-          : reason || `Traspaso desde ${sourceWarehouse?.name}`;
-
-        inMovement = await storage.createInventoryMovement({
-          productId,
-          warehouseId: destinationWarehouseId,
-          movementType: 'in',
-          quantity,
-          reason: inReason,
+        const outMovement = await storage.createInventoryMovement({
+          productId: item.productId,
+          warehouseId: sourceWarehouseId,
+          movementType: 'out',
+          quantity: item.quantity,
+          reason: outReason,
           userId: req.session.userId!,
         });
+
+        let inMovement = null;
+        if (!isIntegrador) {
+          const inReason = isCrossCostCenter
+            ? reason || `Entrada traspaso desde CC ${sourceWarehouse?.costCenter}`
+            : reason || `Traspaso desde ${sourceWarehouse?.name}`;
+
+          inMovement = await storage.createInventoryMovement({
+            productId: item.productId,
+            warehouseId: destinationWarehouseId,
+            movementType: 'in',
+            quantity: item.quantity,
+            reason: inReason,
+            userId: req.session.userId!,
+          });
+        }
+
+        results.push({ productId: item.productId, quantity: item.quantity, outMovement, inMovement });
       }
 
       res.status(201).json({
         message: isIntegrador
           ? "Salida a integrador registrada exitosamente"
           : "Traspaso realizado exitosamente",
-        outMovement,
-        inMovement,
-        transferred: quantity,
+        results,
+        totalItems: items.length,
         type: isIntegrador ? 'dispatch' : 'transfer',
       });
     } catch (error: any) {

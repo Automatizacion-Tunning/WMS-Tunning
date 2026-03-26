@@ -1,13 +1,14 @@
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Bell } from "lucide-react";
+import { Bell, Sun, Moon } from "lucide-react";
 import { MobileSidebarTrigger } from "./Sidebar";
+import { useTheme } from "@/hooks/useTheme";
 
 const pageNames: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Dashboard", subtitle: "Resumen general del inventario" },
   "/warehouses": { title: "Gestión de Bodegas", subtitle: "Bodegas con productos por centro de costo" },
   "/products": { title: "Productos", subtitle: "Gestión de productos" },
-  "/products/movements": { title: "Traspasos", subtitle: "Mover productos entre bodegas" },
+  "/products/movements": { title: "Traspaso de Bodega", subtitle: "Mover productos entre bodegas" },
   "/inventory/stock-entry": { title: "Ingreso de Productos", subtitle: "Gestión de productos por centro de costo" },
   "/users": { title: "Usuarios", subtitle: "Gestión de usuarios" },
   "/users/permissions": { title: "Permisos", subtitle: "Control de permisos" },
@@ -20,7 +21,8 @@ const pageNames: Record<string, { title: string; subtitle: string }> = {
 
 export default function Header() {
   const [location] = useLocation();
-  
+  const { theme, toggleTheme } = useTheme();
+
   const pageInfo = pageNames[location] || { title: "Página", subtitle: "" };
 
   return (
@@ -35,7 +37,16 @@ export default function Header() {
             )}
           </div>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="icon"
+            className="w-8 h-8"
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          >
+            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </Button>
           <div className="relative">
             <Button variant="outline" size="icon" className="w-8 h-8">
               <Bell className="w-4 h-4" />

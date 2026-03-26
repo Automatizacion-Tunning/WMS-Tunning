@@ -516,17 +516,15 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
                 <p className="text-sm text-green-700">Todas las lineas de esta OC han sido recibidas completamente.</p>
               </div>
             ) : (
-              <div className="border rounded-lg overflow-x-auto max-h-48 overflow-y-auto">
-                <table className="w-full text-sm">
+              <div className="border rounded-lg max-h-48 overflow-y-auto">
+                <table className="w-full text-xs">
                   <thead className="sticky top-0">
                     <tr className="border-b bg-muted/50">
-                      <th className="text-left p-2 font-medium">Linea</th>
-                      <th className="text-left p-2 font-medium">Cod.Prod</th>
-                      <th className="text-left p-2 font-medium">Descripcion</th>
-                      <th className="text-right p-2 font-medium">Ordenado</th>
-                      <th className="text-right p-2 font-medium">Recibido</th>
-                      <th className="text-right p-2 font-medium">Pendiente</th>
-                      <th className="text-center p-2 font-medium">Estado</th>
+                      <th className="text-left p-1.5 font-medium">#</th>
+                      <th className="text-left p-1.5 font-medium">Cod.Prod</th>
+                      <th className="text-left p-1.5 font-medium">Descripcion</th>
+                      <th className="text-right p-1.5 font-medium">Pend.</th>
+                      <th className="text-center p-1.5 font-medium">Estado</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -542,19 +540,17 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
                               : 'hover:bg-blue-50 cursor-pointer'
                           }`}
                         >
-                          <td className="p-2 font-mono">{line.numlinea}</td>
-                          <td className="p-2 font-mono text-xs">{line.codprod || "-"}</td>
-                          <td className="p-2">
-                            <div className="max-w-[200px] truncate" title={line.desprod || ""}>{line.desprod || "-"}</div>
+                          <td className="p-1.5 font-mono">{line.numlinea}</td>
+                          <td className="p-1.5 font-mono">{line.codprod || "-"}</td>
+                          <td className="p-1.5">
+                            <div className="max-w-[180px] truncate" title={line.desprod || ""}>{line.desprod || "-"}</div>
                           </td>
-                          <td className="p-2 text-right font-mono">{parseFloat(line.cantidad || "0").toLocaleString("es-CL")}</td>
-                          <td className="p-2 text-right font-mono">{line.localReceivedQuantity.toLocaleString("es-CL")}</td>
-                          <td className="p-2 text-right font-mono font-semibold">{line.pendingQuantity.toLocaleString("es-CL")}</td>
-                          <td className="p-2 text-center">
+                          <td className="p-1.5 text-right font-mono font-semibold">{line.pendingQuantity.toLocaleString("es-CL")}</td>
+                          <td className="p-1.5 text-center">
                             {line.localReceivedQuantity > 0 ? (
-                              <Badge variant="secondary" className="bg-amber-100 text-amber-700 text-xs"><Clock className="w-3 h-3 mr-0.5" />Parcial</Badge>
+                              <Badge variant="secondary" className="bg-amber-100 text-amber-700 text-[10px] px-1.5"><Clock className="w-2.5 h-2.5 mr-0.5" />Parcial</Badge>
                             ) : (
-                              <Badge variant="outline" className="text-xs"><AlertCircle className="w-3 h-3 mr-0.5" />Pendiente</Badge>
+                              <Badge variant="outline" className="text-[10px] px-1.5"><AlertCircle className="w-2.5 h-2.5 mr-0.5" />Pendiente</Badge>
                             )}
                           </td>
                         </tr>

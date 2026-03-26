@@ -95,9 +95,10 @@ export const productSerials = pgTable("product_serials", {
   productId: integer("product_id").notNull(),
   warehouseId: integer("warehouse_id").notNull(),
   serialNumber: varchar("serial_number", { length: 100 }).notNull(),
-  movementId: integer("movement_id").notNull(), // Vinculado al movimiento de inventario
   status: varchar("status", { length: 20 }).notNull().default("active"), // 'active', 'sold', 'damaged'
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  movementId: integer("movement_id"), // Vinculado al movimiento de inventario (nullable)
 });
 
 export const inventory = pgTable("inventory", {
