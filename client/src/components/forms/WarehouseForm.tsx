@@ -150,6 +150,34 @@ export default function WarehouseForm({ onSuccess }: WarehouseFormProps) {
             )}
           />
 
+          {form.watch("warehouseType") === "sub" && (
+            <FormField
+              control={form.control}
+              name="subWarehouseType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tipo de Sub-bodega</FormLabel>
+                  <FormControl>
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona tipo de sub-bodega" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="um2">UM2</SelectItem>
+                        <SelectItem value="plataforma">PLATAFORMA</SelectItem>
+                        <SelectItem value="pem">PEM</SelectItem>
+                        <SelectItem value="integrador">INTEGRADOR</SelectItem>
+                        <SelectItem value="garantia">GARANTIA</SelectItem>
+                        <SelectItem value="despacho">DESPACHO</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
           <FormField
             control={form.control}
             name="parentWarehouseId"

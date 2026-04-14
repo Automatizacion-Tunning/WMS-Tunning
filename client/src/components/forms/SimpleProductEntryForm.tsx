@@ -54,7 +54,7 @@ interface EnrichedOcLine {
 }
 
 interface SimpleProductEntryFormProps {
-  onSuccess?: () => void;
+  onSuccess?: (printData?: { productId: number; productName: string; sku: string | null; serialNumbers?: string[] }) => void;
   onCancel?: () => void;
 }
 
@@ -344,8 +344,16 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
       form.setValue("quantity", 1);
       form.setValue("price", 0);
       form.setValue("reason", "");
+      // Preparar datos para impresión QR
+      const printData = selectedProduct ? {
+        productId: selectedProduct.id,
+        productName: selectedProduct.name,
+        sku: selectedProduct.sku || null,
+        serialNumbers: serialNumbers.length > 0 ? [...serialNumbers] : undefined,
+      } : undefined;
+
       setSerialNumbers([]);
-      onSuccess?.();
+      onSuccess?.(printData);
     },
     onError: (error: any) => {
       toast({

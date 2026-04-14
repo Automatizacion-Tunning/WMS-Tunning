@@ -9,13 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { type TransferOrderWithDetails } from "@shared/schema";
-import { CheckCircle, XCircle, Clock, Package, ArrowRight, Plus } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Package, ArrowRight, Plus, Building2 } from "lucide-react";
 import TransferRequestForm from "@/components/forms/TransferRequestForm";
 
 export default function TransferOrders() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [ccFilter, setCcFilter] = useState<string>("all");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const { data: orders = [], isLoading } = useQuery<TransferOrderWithDetails[]>({
@@ -75,9 +76,13 @@ export default function TransferOrders() {
     await updateStatusMutation.mutateAsync({ orderId, status });
   };
 
+  // Extract unique cost centers from orders
+  const costCenters = [...new Set(orders.map(o => o.costCenter).filter(Boolean))].sort();
+
   const filteredOrders = orders.filter(order => {
-    if (statusFilter === "all") return true;
-    return order.status === statusFilter;
+    if (statusFilter !== "all" && order.status !== statusFilter) return false;
+    if (ccFilter !== "all" && order.costCenter !== ccFilter) return false;
+    return true;
   });
 
   const formatDateTime = (dateString: string) => {
@@ -128,6 +133,19 @@ export default function TransferOrders() {
       </div>
 
       <div className="flex items-center gap-4">
+        <Select value={ccFilter} onValueChange={setCcFilter}>
+          <SelectTrigger className="w-52">
+            <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
+            <SelectValue placeholder="Centro de Costo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los centros</SelectItem>
+            {costCenters.map((cc) => (
+              <SelectItem key={cc} value={cc}>{cc}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-48">
             <SelectValue placeholder="Filtrar por estado" />
@@ -141,7 +159,7 @@ export default function TransferOrders() {
         </Select>
 
         <div className="text-sm text-muted-foreground">
-          {filteredOrders.length} órdenes encontradas
+          {filteredOrders.length} de {orders.length} ordenes
         </div>
       </div>
 

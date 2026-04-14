@@ -33,7 +33,7 @@ const productFormSchema = z.object({
 type ProductFormData = z.infer<typeof productFormSchema>;
 
 interface SimpleProductFormProps {
-  onSuccess?: () => void;
+  onSuccess?: (product?: any) => void;
   onCancel?: () => void;
 }
 
@@ -82,7 +82,7 @@ export default function SimpleProductForm({ onSuccess, onCancel }: SimpleProduct
       const { currentPrice, ...productData } = data;
 
       // Crear el producto (apiRequest lanza error si la respuesta no es ok)
-      await apiRequest("/api/products", {
+      const product = await apiRequest("/api/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -102,8 +102,8 @@ export default function SimpleProductForm({ onSuccess, onCancel }: SimpleProduct
       // Resetear formulario
       form.reset();
 
-      // Callback de éxito
-      onSuccess?.();
+      // Callback de éxito con producto creado
+      onSuccess?.(product);
     } catch (error) {
       toast({
         title: "Error",

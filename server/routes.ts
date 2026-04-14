@@ -223,6 +223,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/warehouse-values — value of each warehouse based on current month prices
+  app.get("/api/warehouse-values", requirePermission("warehouses.view"), async (req: any, res) => {
+    try {
+      const values = await storage.getWarehouseValues();
+      res.json(values);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch warehouse values" });
+    }
+  });
+
+  // POST /api/warehouse-values/recalculate — recalculate all cost center total values
+  app.post("/api/warehouse-values/recalculate", requirePermission("warehouses.view"), async (req: any, res) => {
+    try {
+      const allWarehouses = await storage.getAllWarehouses();
+      const mainWarehouses = allWarehouses.filter(w => w.warehouseType === "main");
+      for (const wh of mainWarehouses) {
+        await storage.updateCostCenterTotalValue(wh.id);
+      }
+      res.json({ message: "Recalculated", count: mainWarehouses.length });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to recalculate" });
+    }
+  });
+
   app.get("/api/warehouses/:id", requirePermission("warehouses.view"), async (req, res) => {
     try {
       const warehouse = await storage.getWarehouse(parseInt(req.params.id));
@@ -293,6 +317,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============================================================
+  // TRACEABILITY ROUTES (read-only, drill-down CC → Bodegas → Productos → OC + Series)
+  // ============================================================
+
+  // GET /api/cost-centers — list cost centers with warehouse count, RBAC-filtered
+  app.get("/api/cost-centers", requirePermission("warehouses.view"), async (req: any, res) => {
+    try {
+      const allowed = await getAllowedCostCenters(req.session.userId);
+      if (Array.isArray(allowed) && allowed.length === 0) return res.json([]);
+      const costCenters = await storage.getAllCostCentersWithCount(
+        allowed === undefined ? undefined : allowed
+      );
+      res.json(costCenters);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch cost centers" });
+    }
+  });
+
+  // GET /api/warehouses/by-cost-center/:costCenter — warehouses of a CC with inventory summary
+  app.get("/api/warehouses/by-cost-center/:costCenter", requirePermission("warehouses.view"), async (req: any, res) => {
+    try {
+      const { costCenter } = req.params;
+      const allowed = await getAllowedCostCenters(req.session.userId);
+      if (Array.isArray(allowed) && !allowed.includes(costCenter)) {
+        return res.status(403).json({ message: "No tiene acceso a este centro de costo" });
+      }
+      const warehousesData = await storage.getWarehousesByCostCenter(costCenter);
+      res.json(warehousesData);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch warehouses by cost center" });
+    }
+  });
+
+  // GET /api/inventory/warehouse/:warehouseId/details — inventory with linked OC receipts
+  app.get("/api/inventory/warehouse/:warehouseId/details", requirePermission("inventory.view"), async (req: any, res) => {
+    try {
+      const warehouseId = parseInt(req.params.warehouseId);
+      if (isNaN(warehouseId)) return res.status(400).json({ message: "Invalid warehouse ID" });
+
+      // Validate user access to this warehouse's cost center
+      const warehouse = await storage.getWarehouse(warehouseId);
+      if (!warehouse) return res.status(404).json({ message: "Warehouse not found" });
+
+      const allowed = await getAllowedCostCenters(req.session.userId);
+      if (Array.isArray(allowed) && !allowed.includes(warehouse.costCenter)) {
+        return res.status(403).json({ message: "No tiene acceso a esta bodega" });
+      }
+
+      const inventoryDetails = await storage.getInventoryWithOcByWarehouse(warehouseId);
+      res.json(inventoryDetails);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch inventory details" });
+    }
+  });
+
+  // GET /api/product-serials/:productId/warehouse/:warehouseId — active serials
+  app.get("/api/product-serials/:productId/warehouse/:warehouseId", requirePermission("inventory.view"), async (req: any, res) => {
+    try {
+      const productId = parseInt(req.params.productId);
+      const warehouseId = parseInt(req.params.warehouseId);
+      if (isNaN(productId) || isNaN(warehouseId)) {
+        return res.status(400).json({ message: "Invalid product or warehouse ID" });
+      }
+
+      // Validate user access
+      const warehouse = await storage.getWarehouse(warehouseId);
+      if (!warehouse) return res.status(404).json({ message: "Warehouse not found" });
+
+      const allowed = await getAllowedCostCenters(req.session.userId);
+      if (Array.isArray(allowed) && !allowed.includes(warehouse.costCenter)) {
+        return res.status(403).json({ message: "No tiene acceso a esta bodega" });
+      }
+
+      const serials = await storage.getProductSerials(productId, warehouseId);
+      res.json(serials);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch product serials" });
+    }
+  });
+
+  // GET /api/cost-centers/:costCenter/purchase-orders — OCs with receipts in this CC
+  app.get("/api/cost-centers/:costCenter/purchase-orders", requirePermission("warehouses.view"), async (req: any, res) => {
+    try {
+      const { costCenter } = req.params;
+      const allowed = await getAllowedCostCenters(req.session.userId);
+      if (Array.isArray(allowed) && !allowed.includes(costCenter)) {
+        return res.status(403).json({ message: "No tiene acceso a este centro de costo" });
+      }
+      const data = await storage.getPurchaseOrdersByCostCenter(costCenter);
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch purchase orders by cost center" });
+    }
+  });
+
+  // GET /api/cost-centers/:costCenter/products — Products with stock and linked OC in this CC
+  app.get("/api/cost-centers/:costCenter/products", requirePermission("warehouses.view"), async (req: any, res) => {
+    try {
+      const { costCenter } = req.params;
+      const allowed = await getAllowedCostCenters(req.session.userId);
+      if (Array.isArray(allowed) && !allowed.includes(costCenter)) {
+        return res.status(403).json({ message: "No tiene acceso a este centro de costo" });
+      }
+      const data = await storage.getProductsByCostCenter(costCenter);
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch products by cost center" });
+    }
+  });
+
+  // GET /api/cost-centers/:costCenter/products/:productId/detail — Full product detail with traceability
+  app.get("/api/cost-centers/:costCenter/products/:productId/detail", requirePermission("warehouses.view"), async (req: any, res) => {
+    try {
+      const { costCenter, productId } = req.params;
+      const pid = parseInt(productId);
+      if (isNaN(pid)) {
+        return res.status(400).json({ message: "Invalid product ID" });
+      }
+      const allowed = await getAllowedCostCenters(req.session.userId);
+      if (Array.isArray(allowed) && !allowed.includes(costCenter)) {
+        return res.status(403).json({ message: "No tiene acceso a este centro de costo" });
+      }
+      const data = await storage.getProductDetailByCostCenter(costCenter, pid);
+      if (!data) {
+        return res.status(404).json({ message: "Product not found in this cost center" });
+      }
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch product detail" });
+    }
+  });
+
+  // ============================================================
   // PRODUCT ROUTES (requiere autenticación)
   // ============================================================
 
@@ -324,7 +480,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/products/:id", requirePermission("products.view"), async (req, res) => {
     try {
-      const product = await storage.getProduct(parseInt(req.params.id));
+      const product = await storage.getProductWithDetails(parseInt(req.params.id));
       if (!product) {
         return res.status(404).json({ message: "Product not found" });
       }
@@ -450,8 +606,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/inventory", requirePermission("inventory.view"), async (req, res) => {
     try {
-      const inventory = await storage.getAllInventory();
-      res.json(inventory);
+      const excludeSpecial = req.query.excludeSpecial === 'true';
+      let inventoryData = await storage.getAllInventory();
+      if (excludeSpecial) {
+        const specialTypes = ['garantia', 'despacho'];
+        inventoryData = inventoryData.filter(
+          (item: any) => !specialTypes.includes(item.warehouse?.subWarehouseType)
+        );
+      }
+      res.json(inventoryData);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch inventory" });
     }
@@ -518,7 +681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Traspaso directo entre bodegas — acepta múltiples productos
   app.post("/api/inventory-transfers", requirePermission("inventory.movements"), async (req: any, res) => {
     try {
-      const { sourceWarehouseId, destinationWarehouseId, items, reason } = req.body;
+      const { sourceWarehouseId, destinationWarehouseId, items, reason, dispatchGuideNumber } = req.body;
 
       if (!sourceWarehouseId || !destinationWarehouseId || !items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ message: "Faltan campos requeridos" });
@@ -548,16 +711,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const sourceWarehouse = await storage.getWarehouse(sourceWarehouseId);
       const isIntegrador = destWarehouse.subWarehouseType === 'integrador';
+      const isGarantia = destWarehouse.subWarehouseType === 'garantia';
+      const isDespacho = destWarehouse.subWarehouseType === 'despacho';
       const isCrossCostCenter = sourceWarehouse && destWarehouse.costCenter !== sourceWarehouse.costCenter;
+
+      // Verificar si origen es bodega especial (garantia/despacho)
+      const sourceIsGarantia = sourceWarehouse?.subWarehouseType === 'garantia';
+      const sourceIsDespacho = sourceWarehouse?.subWarehouseType === 'despacho';
+
+      // Restricción admin-only para movimientos hacia/desde bodega Despacho
+      if (isDespacho || sourceIsDespacho) {
+        const authCtx = await getUserPermissions(req.session.userId!);
+        if (!authCtx.isAdmin) {
+          return res.status(403).json({ message: "Solo administradores pueden mover productos hacia/desde la bodega Despacho" });
+        }
+      }
+
+      // Guía de despacho obligatoria cuando destino es bodega despacho
+      if (isDespacho && (!dispatchGuideNumber || !dispatchGuideNumber.trim())) {
+        return res.status(400).json({ message: "El número de guía de despacho es obligatorio para movimientos a bodega de despacho" });
+      }
 
       // Ejecutar movimientos por cada item
       const results = [];
       for (const item of items) {
-        const outReason = isIntegrador
-          ? reason || `Salida a integrador - ${destWarehouse.name}`
-          : isCrossCostCenter
-            ? reason || `Salida traspaso a CC ${destWarehouse.costCenter}`
-            : reason || `Traspaso a ${destWarehouse.name}`;
+        // Determinar razón automática según tipo de bodega destino
+        let outReason: string;
+        if (isDespacho) {
+          outReason = reason || `Despacho a cliente - ${destWarehouse.name}`;
+        } else if (isGarantia) {
+          outReason = reason || `Envío a revisión por garantía - ${destWarehouse.name}`;
+        } else if (isIntegrador) {
+          outReason = reason || `Salida a integrador - ${destWarehouse.name}`;
+        } else if (sourceIsDespacho) {
+          outReason = reason || `Retorno desde despacho - ${sourceWarehouse?.name}`;
+        } else if (sourceIsGarantia) {
+          outReason = reason || `Retorno desde garantía - ${sourceWarehouse?.name}`;
+        } else if (isCrossCostCenter) {
+          outReason = reason || `Salida traspaso a CC ${destWarehouse.costCenter}`;
+        } else {
+          outReason = reason || `Traspaso a ${destWarehouse.name}`;
+        }
 
         const outMovement = await storage.createInventoryMovement({
           productId: item.productId,
@@ -566,13 +760,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           quantity: item.quantity,
           reason: outReason,
           userId: req.session.userId!,
+          ...(isDespacho && dispatchGuideNumber ? { dispatchGuideNumber: dispatchGuideNumber.trim() } : {}),
         });
 
         let inMovement = null;
+        // Integrador: solo OUT (sin IN). Garantía y Despacho: ambos movimientos (IN + OUT)
         if (!isIntegrador) {
-          const inReason = isCrossCostCenter
-            ? reason || `Entrada traspaso desde CC ${sourceWarehouse?.costCenter}`
-            : reason || `Traspaso desde ${sourceWarehouse?.name}`;
+          let inReason: string;
+          if (isDespacho) {
+            inReason = reason || `Despacho a cliente`;
+          } else if (isGarantia) {
+            inReason = reason || `Envío a revisión por garantía`;
+          } else if (sourceIsDespacho) {
+            inReason = reason || `Retorno desde despacho`;
+          } else if (sourceIsGarantia) {
+            inReason = reason || `Retorno desde garantía`;
+          } else if (isCrossCostCenter) {
+            inReason = reason || `Entrada traspaso desde CC ${sourceWarehouse?.costCenter}`;
+          } else {
+            inReason = reason || `Traspaso desde ${sourceWarehouse?.name}`;
+          }
 
           inMovement = await storage.createInventoryMovement({
             productId: item.productId,
@@ -581,19 +788,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
             quantity: item.quantity,
             reason: inReason,
             userId: req.session.userId!,
+            ...(isDespacho && dispatchGuideNumber ? { dispatchGuideNumber: dispatchGuideNumber.trim() } : {}),
           });
         }
 
         results.push({ productId: item.productId, quantity: item.quantity, outMovement, inMovement });
       }
 
+      // Determinar tipo de respuesta
+      let transferType = 'transfer';
+      let message = 'Traspaso realizado exitosamente';
+      if (isIntegrador) {
+        transferType = 'dispatch';
+        message = 'Salida a integrador registrada exitosamente';
+      } else if (isDespacho) {
+        transferType = 'dispatch_client';
+        message = 'Despacho a cliente registrado exitosamente';
+      } else if (isGarantia) {
+        transferType = 'warranty';
+        message = 'Envío a garantía registrado exitosamente';
+      }
+
       res.status(201).json({
-        message: isIntegrador
-          ? "Salida a integrador registrada exitosamente"
-          : "Traspaso realizado exitosamente",
+        message,
         results,
         totalItems: items.length,
-        type: isIntegrador ? 'dispatch' : 'transfer',
+        type: transferType,
       });
     } catch (error: any) {
       if (error?.message?.includes('Stock insuficiente')) {
@@ -601,6 +821,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error en traspaso:", error);
       res.status(500).json({ message: "Error al realizar el traspaso" });
+    }
+  });
+
+  // Hoja de Vida del producto — todos los datos consolidados
+  app.get("/api/products/:id/vida", requirePermission("products.view"), async (req, res) => {
+    try {
+      const productId = parseInt(req.params.id);
+      const product = await storage.getProductWithDetails(productId);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+
+      // Obtener datos en paralelo
+      const [inventory, movements, allSerials] = await Promise.all([
+        storage.getInventoryByProduct(productId),
+        storage.getInventoryMovementsByProduct(productId),
+        storage.getAllProductSerials(productId),
+      ]);
+
+      res.json({
+        product,
+        inventory,
+        movements,
+        serials: allSerials,
+      });
+    } catch (error) {
+      console.error("Error fetching product vida:", error);
+      res.status(500).json({ message: "Failed to fetch product life sheet" });
     }
   });
 
@@ -648,6 +896,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (validatedData.sourceWarehouseId === validatedData.destinationWarehouseId) {
         return res.status(400).json({ message: "La bodega de origen y destino no pueden ser la misma" });
+      }
+
+      // Verificar restricción admin para bodegas Despacho
+      const destWh = await storage.getWarehouse(validatedData.destinationWarehouseId);
+      const srcWh = await storage.getWarehouse(validatedData.sourceWarehouseId);
+      if (destWh?.subWarehouseType === 'despacho' || srcWh?.subWarehouseType === 'despacho') {
+        const authCtx = await getUserPermissions(req.session.userId!);
+        if (!authCtx.isAdmin) {
+          return res.status(403).json({ message: "Solo administradores pueden crear traspasos hacia/desde la bodega Despacho" });
+        }
       }
 
       const orderNumber = await storage.generateOrderNumber();

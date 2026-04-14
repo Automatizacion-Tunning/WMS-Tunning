@@ -27,8 +27,9 @@ export const warehouses = pgTable("warehouses", {
   costCenter: varchar("cost_center", { length: 100 }).notNull(),
   parentWarehouseId: integer("parent_warehouse_id"),
   warehouseType: varchar("warehouse_type", { length: 50 }).notNull().default('sub'), // 'main' or 'sub'
-  subWarehouseType: varchar("sub_warehouse_type", { length: 50 }), // 'um2', 'plataforma', 'pem', 'integrador' for sub-warehouses
+  subWarehouseType: varchar("sub_warehouse_type", { length: 50 }), // 'um2', 'plataforma', 'pem', 'integrador', 'garantia', 'despacho' for sub-warehouses
   isActive: boolean("is_active").notNull().default(true),
+  totalValue: decimal("total_value", { precision: 14, scale: 2 }).default("0"), // Valor total del CC, almacenado en bodega main
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -123,6 +124,7 @@ export const inventoryMovements = pgTable("inventory_movements", {
   purchaseOrderNumber: varchar("purchase_order_number", { length: 50 }), // numoc de la OC
   purchaseOrderLine: integer("purchase_order_line"), // numlinea de la OC
   purchaseOrderCodprod: varchar("purchase_order_codprod", { length: 100 }), // codprod para trazabilidad
+  dispatchGuideNumber: varchar("dispatch_guide_number", { length: 100 }), // Número de guía de despacho
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

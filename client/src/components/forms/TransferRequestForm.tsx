@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 import { apiRequest } from "@/lib/queryClient";
 import { transferRequestSchema, type Product, type Warehouse, type InventoryWithDetails } from "@shared/schema";
 import { z } from "zod";
@@ -22,6 +23,7 @@ interface TransferRequestFormProps {
 export default function TransferRequestForm({ onSuccess, onCancel }: TransferRequestFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAdmin } = usePermissions();
 
   const { data: products = [] } = useQuery<Product[]>({
     queryKey: ["/api/products"],
@@ -47,22 +49,40 @@ export default function TransferRequestForm({ onSuccess, onCancel }: TransferReq
     },
   });
 
+  const selectedCostCenter = form.watch("costCenter");
   const selectedProductId = form.watch("productId");
   const selectedSourceWarehouseId = form.watch("sourceWarehouseId");
-  
-  // Filter warehouses by type and availability
-  const sourceWarehouses = warehouses.filter(w => w.isActive);
-  const destinationWarehouses = warehouses.filter(w => 
-    w.isActive && w.id !== selectedSourceWarehouseId
-  );
+
+  // Get unique cost centers from warehouses
+  const costCenters = [...new Set(warehouses.filter(w => w.isActive).map(w => w.costCenter))].sort();
+
+  // Tipos de bodega especial
+  const specialTypes = ['garantia', 'despacho'];
+
+  // Filter warehouses by selected cost center
+  // Bodegas origen: excluir bodegas especiales (garantia/despacho) para traspasos normales
+  const sourceWarehouses = warehouses.filter(w => {
+    if (!w.isActive) return false;
+    if (selectedCostCenter && w.costCenter !== selectedCostCenter) return false;
+    // Despacho como origen: solo admin
+    if (w.subWarehouseType === 'despacho' && !isAdmin) return false;
+    return true;
+  });
+
+  // Bodegas destino: mostrar todas, pero Despacho solo para admin
+  const destinationWarehouses = warehouses.filter(w => {
+    if (!w.isActive) return false;
+    if (w.id === selectedSourceWarehouseId) return false;
+    if (selectedCostCenter && w.costCenter !== selectedCostCenter) return false;
+    // Despacho como destino: solo admin
+    if (w.subWarehouseType === 'despacho' && !isAdmin) return false;
+    return true;
+  });
 
   // Get available stock for selected product in selected warehouse
   const availableStock = inventory.find(
     inv => inv.productId === selectedProductId && inv.warehouseId === selectedSourceWarehouseId
   )?.quantity || 0;
-
-  // Get cost centers from warehouses
-  const costCenters = [...new Set(warehouses.map(w => w.costCenter))];
 
   const transferRequestMutation = useMutation({
     mutationFn: async (data: TransferRequestData) => {
@@ -114,6 +134,42 @@ export default function TransferRequestForm({ onSuccess, onCancel }: TransferReq
             Solicita el traspaso de productos entre bodegas. Requiere aprobación del jefe de proyectos.
           </p>
         </div>
+
+        <FormField
+          control={form.control}
+          name="costCenter"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Centro de Costos</FormLabel>
+              <Select
+                onValueChange={(value) => {
+                  field.onChange(value);
+                  // Reset warehouses when CC changes
+                  form.setValue("sourceWarehouseId", 0);
+                  form.setValue("destinationWarehouseId", 0);
+                }}
+                value={field.value}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar centro de costos" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {costCenters.map((cc) => (
+                    <SelectItem key={cc} value={cc}>
+                      {cc}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                Las bodegas se filtran por el centro de costo seleccionado
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <FormField
           control={form.control}
@@ -171,6 +227,12 @@ export default function TransferRequestForm({ onSuccess, onCancel }: TransferReq
                         <Badge variant="outline" className="text-xs">
                           {warehouse.costCenter}
                         </Badge>
+                        {warehouse.subWarehouseType === 'garantia' && (
+                          <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800">Garantía</Badge>
+                        )}
+                        {warehouse.subWarehouseType === 'despacho' && (
+                          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800">Despacho</Badge>
+                        )}
                       </div>
                     </SelectItem>
                   ))}
@@ -204,6 +266,12 @@ export default function TransferRequestForm({ onSuccess, onCancel }: TransferReq
                         <Badge variant="outline" className="text-xs">
                           {warehouse.costCenter}
                         </Badge>
+                        {warehouse.subWarehouseType === 'garantia' && (
+                          <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800">Garantía</Badge>
+                        )}
+                        {warehouse.subWarehouseType === 'despacho' && (
+                          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800">Despacho</Badge>
+                        )}
                       </div>
                     </SelectItem>
                   ))}
@@ -255,34 +323,6 @@ export default function TransferRequestForm({ onSuccess, onCancel }: TransferReq
                   Stock disponible en {selectedSourceWarehouse?.name}: {availableStock} unidades
                 </FormDescription>
               )}
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="costCenter"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Centro de Costos</FormLabel>
-              <Select
-                onValueChange={field.onChange}
-                value={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar centro de costos" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {costCenters.map((costCenter) => (
-                    <SelectItem key={costCenter} value={costCenter}>
-                      {costCenter}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
               <FormMessage />
             </FormItem>
           )}

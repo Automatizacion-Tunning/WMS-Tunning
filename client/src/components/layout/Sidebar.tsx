@@ -14,7 +14,9 @@ import {
   ArrowUpCircle,
   RefreshCcw,
   Menu,
-  ShieldAlert
+  ShieldAlert,
+  GitBranch,
+  Truck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -32,7 +34,7 @@ interface NavItem {
 function SidebarContent() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
-  const { can, canAny, roleName, isLoading: permissionsLoading } = usePermissions();
+  const { can, canAny, isAdmin, roleName, isLoading: permissionsLoading } = usePermissions();
 
   const isActive = (href: string) => {
     if (href === "/") {
@@ -59,6 +61,7 @@ function SidebarContent() {
   const warehouseNav: NavItem[] = [];
   if (can("cost_centers.view")) warehouseNav.push({ name: "Centros de Costos", href: "/cost-centers", icon: Building2 });
   if (can("warehouses.view")) warehouseNav.push({ name: "Administración", href: "/warehouses", icon: Settings });
+  if (canAny(["warehouses.view", "inventory.view"])) warehouseNav.push({ name: "Trazabilidad", href: "/traceability", icon: GitBranch });
 
   const productNav: NavItem[] = [];
   if (can("products.view")) productNav.push({ name: "Gestión", href: "/products", icon: Package });
@@ -66,6 +69,7 @@ function SidebarContent() {
 
   const inventoryNav: NavItem[] = [];
   if (can("inventory.entry")) inventoryNav.push({ name: "Ingreso de Productos", href: "/inventory/stock-entry", icon: ArrowUpCircle });
+  if (isAdmin) inventoryNav.push({ name: "Despacho", href: "/despacho", icon: Truck });
 
   const ordersNav: NavItem[] = [];
   if (canAny(["orders.view_purchase", "orders.entry_oc"])) ordersNav.push({ name: "Ingreso Orden de Compra", href: "/orders/purchase-order", icon: FileText });

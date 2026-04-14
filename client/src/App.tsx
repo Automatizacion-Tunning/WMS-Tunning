@@ -11,6 +11,7 @@ import Dashboard from "@/pages/Dashboard";
 import WarehouseManagement from "@/pages/warehouses/WarehouseManagement";
 import WarehouseDetails from "@/pages/warehouses/WarehouseDetails";
 import CostCenterManagement from "@/pages/warehouses/CostCenterManagement";
+import TraceabilityView from "@/pages/warehouses/TraceabilityView";
 import ProductMovements from "@/pages/products/ProductMovements";
 import ProductManagement from "@/pages/products/ProductManagement";
 import UserManagement from "@/pages/users/UserManagement";
@@ -19,6 +20,8 @@ import StockEntry from "@/pages/inventory/StockEntry";
 import TransferOrders from "@/pages/orders/TransferOrders";
 import PurchaseOrders from "@/pages/orders/PurchaseOrders";
 import TestBarcode from "@/pages/TestBarcode";
+import DispatchPage from "@/pages/dispatch/DispatchPage";
+import ProductDetail from "@/pages/products/ProductDetail";
 
 function Router() {
   const { isAuthenticated, isLoading, login } = useAuth();
@@ -45,6 +48,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/warehouses" component={WarehouseManagement} />
         <Route path="/cost-centers" component={CostCenterManagement} />
+        <Route path="/traceability" component={TraceabilityView} />
         <Route path="/products" component={ProductManagement} />
         <Route path="/products/management" component={ProductManagement} />
         <Route path="/products/movements" component={ProductMovements} />
@@ -53,6 +57,8 @@ function Router() {
         <Route path="/orders/transfer-orders" component={TransferOrders} />
         <Route path="/users" component={UserManagement} />
         <Route path="/roles" component={RolesManagement} />
+        <Route path="/despacho" component={DispatchPage} />
+        <Route path="/producto/:id" component={ProductDetail} />
         <Route path="/test-barcode" component={TestBarcode} />
         <Route component={NotFound} />
       </Switch>

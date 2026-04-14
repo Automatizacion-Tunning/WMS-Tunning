@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Prueba QR - Brother QL-810W</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: #1a1a1a;
+      color: white;
+    }
+    h1 { margin-bottom: 10px; }
+    .preview {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px;
+    }
+    .qr-label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+    }
+    .qr-label img {
+      display: block;
+      width: 200px;
+      height: 200px;
+    }
+    .qr-sku {
+      font-size: 14px;
+      font-weight: bold;
+      font-family: monospace;
+      color: black;
+    }
+    .qr-name {
+      font-size: 11px;
+      color: #333;
+      text-align: center;
+      max-width: 200px;
+    }
+    button {
+      padding: 12px 32px;
+      font-size: 16px;
+      background: #e6a817;
+      color: black;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    button:hover { background: #d49b0e; }
+    .info {
+      margin-top: 20px;
+      color: #888;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    /* CSS para impresion Brother QL-810W — Etiqueta precortada 62mm x 100mm */
+    @media print {
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 62mm;
+        height: 100mm;
+        overflow: hidden;
+      }
+      body > *:not(.preview) { display: none !important; }
+      .preview > * { display: block !important; }
+      .preview { display: block !important; margin: 0; padding: 0; background: none; border: none; }
+      .qr-label {
+        display: flex !important;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 62mm;
+        height: 100mm;
+        text-align: center;
+        padding: 5mm 3mm;
+        background: white;
+        gap: 2mm;
+        box-sizing: border-box;
+      }
+      @page {
+        size: 62mm 100mm;
+        margin: 0;
+      }
+      .qr-label img {
+        width: 45mm !important;
+        height: 45mm !important;
+      }
+      .qr-sku {
+        font-size: 12pt;
+        font-weight: bold;
+        font-family: monospace;
+        margin-top: 2mm;
+        color: black;
+      }
+      .qr-name {
+        font-size: 10pt;
+        margin-top: 1mm;
+        color: black;
+        max-width: 56mm;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Prueba de Etiqueta QR</h1>
+  <p>Brother QL-810W — 62mm x 100mm</p>
+
+  <div class="preview">
+    <div class="qr-label">
+      <img id="qrImage" alt="QR Code" />
+      <p class="qr-sku">SKU-TEST-001</p>
+      <p class="qr-name">Producto de Prueba - Control de Inventario WMS</p>
+    </div>
+  </div>
+
+  <button onclick="window.print()">Imprimir Etiqueta</button>
+
+  <div class="info">
+    <p>1. Click en "Imprimir Etiqueta"</p>
+    <p>2. Selecciona "Brother QL-810W" como impresora</p>
+    <p>3. Click en "Imprimir"</p>
+  </div>
+
+  <script>
+    // Generador QR simple sin dependencias externas
+    // Usa la API de Google Charts para generar el QR como imagen
+    const text = encodeURIComponent('http://localhost:5000/producto/1');
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${text}`;
+    document.getElementById('qrImage').src = qrUrl;
+  </script>
+</body>
+</html>

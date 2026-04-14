@@ -87,6 +87,11 @@ export interface IStorage {
   // Cost Center operations
   createCostCenter(costCenter: string, location?: string): Promise<Warehouse[]>;
 
+  // Traceability (read-only)
+  getAllCostCentersWithCount(allowedCostCenters?: string[]): Promise<{ costCenter: string; warehouseCount: number }[]>;
+  getWarehousesByCostCenter(costCenter: string): Promise<(Warehouse & { totalProducts: number; totalUnits: number })[]>;
+  getInventoryWithOcByWarehouse(warehouseId: number): Promise<any[]>;
+
   // Transfer Orders operations
   createTransferOrder(order: InsertTransferOrder): Promise<TransferOrder>;
   getTransferOrders(userId?: number, role?: string, costCenter?: string): Promise<TransferOrderWithDetails[]>;
@@ -121,6 +126,8 @@ export interface IStorage {
 
   // Enhanced product operations
   getAllProductsWithDetails(): Promise<ProductWithDetails[]>;
+  getProductWithDetails(id: number): Promise<ProductWithDetails | undefined>;
+  getAllProductSerials(productId: number): Promise<any[]>;
 
   // Purchase Order Receipt tracking
   getReceiptsByOC(purchaseOrderNumber: string): Promise<PurchaseOrderReceipt[]>;
@@ -150,6 +157,11 @@ export interface IStorage {
   getAllActiveCostCenters(): Promise<string[]>;
   getDashboardOcStatus(costCenters?: string[]): Promise<DashboardOcStatus[]>;
   getDashboardWarehouseDistribution(costCenters?: string[]): Promise<DashboardWarehouseDistribution[]>;
+
+  // Cost Center sub-sections (read-only)
+  getPurchaseOrdersByCostCenter(costCenter: string): Promise<any[]>;
+  getProductsByCostCenter(costCenter: string): Promise<any[]>;
+  getProductDetailByCostCenter(costCenter: string, productId: number): Promise<any | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -475,6 +487,9 @@ export class DatabaseStorage implements IStorage {
 
     await this.updateInventory(movement.productId, movement.warehouseId, newQuantity);
 
+    // Recalculate cost center total value
+    this.updateCostCenterTotalValue(movement.warehouseId).catch(() => {});
+
     return created;
   }
 
@@ -493,6 +508,7 @@ export class DatabaseStorage implements IStorage {
       purchaseOrderNumber: inventoryMovements.purchaseOrderNumber,
       purchaseOrderLine: inventoryMovements.purchaseOrderLine,
       purchaseOrderCodprod: inventoryMovements.purchaseOrderCodprod,
+      dispatchGuideNumber: inventoryMovements.dispatchGuideNumber,
       createdAt: inventoryMovements.createdAt,
       product: products,
       warehouse: warehouses,
@@ -521,6 +537,7 @@ export class DatabaseStorage implements IStorage {
       purchaseOrderNumber: inventoryMovements.purchaseOrderNumber,
       purchaseOrderLine: inventoryMovements.purchaseOrderLine,
       purchaseOrderCodprod: inventoryMovements.purchaseOrderCodprod,
+      dispatchGuideNumber: inventoryMovements.dispatchGuideNumber,
       createdAt: inventoryMovements.createdAt,
       product: products,
       warehouse: warehouses,
@@ -626,6 +643,25 @@ export class DatabaseStorage implements IStorage {
     return newSerial;
   }
 
+  async getAllProductSerials(productId: number): Promise<any[]> {
+    const result = await db.select({
+      id: productSerials.id,
+      productId: productSerials.productId,
+      warehouseId: productSerials.warehouseId,
+      serialNumber: productSerials.serialNumber,
+      status: productSerials.status,
+      createdAt: productSerials.createdAt,
+      updatedAt: productSerials.updatedAt,
+      movementId: productSerials.movementId,
+      warehouse: warehouses,
+    })
+    .from(productSerials)
+    .innerJoin(warehouses, eq(productSerials.warehouseId, warehouses.id))
+    .where(eq(productSerials.productId, productId))
+    .orderBy(asc(productSerials.createdAt));
+    return result;
+  }
+
   async getProductSerials(productId: number, warehouseId: number): Promise<ProductSerial[]> {
     return await db.select().from(productSerials)
       .where(and(
@@ -671,8 +707,8 @@ export class DatabaseStorage implements IStorage {
         .returning();
 
       // Create sub-warehouses
-      const subWarehouseTypes = ['um2', 'plataforma', 'pem', 'integrador'];
-      const subWarehouseNames = ['UM2', 'Plataforma', 'PEM', 'Integrador'];
+      const subWarehouseTypes = ['um2', 'plataforma', 'pem', 'integrador', 'garantia', 'despacho'];
+      const subWarehouseNames = ['UM2', 'Plataforma', 'PEM', 'Integrador', 'Garantía', 'Despacho'];
       
       const subWarehouses = await db
         .insert(warehouses)
@@ -693,6 +729,132 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       throw new Error(`Failed to create cost center: ${error}`);
     }
+  }
+
+  // Traceability: cost centers with warehouse count
+  async getAllCostCentersWithCount(allowedCostCenters?: string[]): Promise<{ costCenter: string; warehouseCount: number }[]> {
+    const conditions = [eq(warehouses.isActive, true)];
+    if (allowedCostCenters) {
+      conditions.push(inArray(warehouses.costCenter, allowedCostCenters));
+    }
+    const results = await db
+      .select({
+        costCenter: warehouses.costCenter,
+        warehouseCount: count(warehouses.id),
+      })
+      .from(warehouses)
+      .where(and(...conditions))
+      .groupBy(warehouses.costCenter)
+      .orderBy(asc(warehouses.costCenter));
+    return results.map(r => ({ costCenter: r.costCenter, warehouseCount: Number(r.warehouseCount) }));
+  }
+
+  // Traceability: warehouses by cost center with inventory summary
+  async getWarehousesByCostCenter(costCenter: string): Promise<(Warehouse & { totalProducts: number; totalUnits: number })[]> {
+    const warehouseList = await db.select().from(warehouses)
+      .where(and(eq(warehouses.costCenter, costCenter), eq(warehouses.isActive, true)))
+      .orderBy(asc(warehouses.warehouseType), asc(warehouses.name));
+
+    const result = [];
+    for (const wh of warehouseList) {
+      const invSummary = await db
+        .select({
+          totalProducts: count(inventory.productId),
+          totalUnits: sql<number>`coalesce(sum(${inventory.quantity}), 0)`,
+        })
+        .from(inventory)
+        .where(eq(inventory.warehouseId, wh.id));
+      result.push({
+        ...wh,
+        totalProducts: Number(invSummary[0]?.totalProducts || 0),
+        totalUnits: Number(invSummary[0]?.totalUnits || 0),
+      });
+    }
+    return result;
+  }
+
+  // Warehouse values: SUM(inventory.quantity * latest price) per warehouse
+  // Uses current month price if available, otherwise falls back to most recent price
+  // Excludes dispatch warehouses (subWarehouseType = 'despacho') from value calculation
+  async getWarehouseValues(): Promise<{ warehouseId: number; warehouseValue: number }[]> {
+    const results = await db.execute(sql`
+      SELECT i.warehouse_id as "warehouseId",
+             coalesce(sum(i.quantity * coalesce(pp.price, 0)), 0) as "warehouseValue"
+      FROM inventory i
+      INNER JOIN warehouses w ON w.id = i.warehouse_id
+        AND (w.sub_warehouse_type IS NULL OR w.sub_warehouse_type != 'despacho')
+      LEFT JOIN LATERAL (
+        SELECT price FROM product_prices
+        WHERE product_id = i.product_id
+        ORDER BY year DESC, month DESC
+        LIMIT 1
+      ) pp ON true
+      WHERE i.quantity > 0
+      GROUP BY i.warehouse_id
+    `);
+
+    return (results.rows as any[]).map(r => ({
+      warehouseId: Number(r.warehouseId),
+      warehouseValue: Number(r.warehouseValue),
+    }));
+  }
+
+  // Recalculate and persist total value for a cost center (stored in main warehouse)
+  async updateCostCenterTotalValue(warehouseId: number): Promise<void> {
+    // Find the cost center for this warehouse
+    const wh = await db.select().from(warehouses).where(eq(warehouses.id, warehouseId)).limit(1);
+    if (!wh.length) return;
+    const costCenter = wh[0].costCenter;
+
+    // Calculate total value using latest available price per product
+    // Exclude dispatch warehouses (subWarehouseType = 'despacho') — dispatched products no longer represent value in storage
+    const result = await db.execute(sql`
+      SELECT coalesce(sum(i.quantity * coalesce(pp.price, 0)), 0) as total
+      FROM inventory i
+      INNER JOIN warehouses w ON w.id = i.warehouse_id AND w.cost_center = ${costCenter} AND w.is_active = true
+        AND (w.sub_warehouse_type IS NULL OR w.sub_warehouse_type != 'despacho')
+      LEFT JOIN LATERAL (
+        SELECT price FROM product_prices
+        WHERE product_id = i.product_id
+        ORDER BY year DESC, month DESC
+        LIMIT 1
+      ) pp ON true
+      WHERE i.quantity > 0
+    `);
+
+    const totalValue = String(Number((result.rows as any[])[0]?.total || 0).toFixed(2));
+
+    // Store in main warehouse of this cost center
+    await db.update(warehouses)
+      .set({ totalValue })
+      .where(and(eq(warehouses.costCenter, costCenter), eq(warehouses.warehouseType, "main")));
+  }
+
+  // Traceability: inventory with linked purchase order receipts by warehouse
+  async getInventoryWithOcByWarehouse(warehouseId: number): Promise<any[]> {
+    const invItems = await db.select({
+      id: inventory.id,
+      productId: inventory.productId,
+      warehouseId: inventory.warehouseId,
+      quantity: inventory.quantity,
+      product: products,
+    })
+    .from(inventory)
+    .innerJoin(products, eq(inventory.productId, products.id))
+    .where(eq(inventory.warehouseId, warehouseId))
+    .orderBy(asc(products.name));
+
+    const result = [];
+    for (const item of invItems) {
+      // Get linked purchase order receipts for this product
+      const receipts = await db.select().from(purchaseOrderReceipts)
+        .where(eq(purchaseOrderReceipts.productId, item.productId));
+      result.push({
+        ...item,
+        purchaseOrderReceipts: receipts,
+      });
+    }
+    return result;
   }
 
   // Transfer Orders operations
@@ -1038,6 +1200,61 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async getProductWithDetails(id: number): Promise<ProductWithDetails | undefined> {
+    const result = await db.select({
+      id: products.id,
+      name: products.name,
+      sku: products.sku,
+      barcode: products.barcode,
+      description: products.description,
+      productType: products.productType,
+      requiresSerial: products.requiresSerial,
+      unitId: products.unitId,
+      categoryId: products.categoryId,
+      brandId: products.brandId,
+      hasWarranty: products.hasWarranty,
+      warrantyMonths: products.warrantyMonths,
+      isActive: products.isActive,
+      createdAt: products.createdAt,
+      updatedAt: products.updatedAt,
+      erpProductCode: products.erpProductCode,
+      unit: units,
+      category: categories,
+      brand: brands,
+    })
+    .from(products)
+    .innerJoin(units, eq(products.unitId, units.id))
+    .innerJoin(categories, eq(products.categoryId, categories.id))
+    .innerJoin(brands, eq(products.brandId, brands.id))
+    .where(eq(products.id, id))
+    .limit(1);
+
+    if (result.length === 0) return undefined;
+
+    const row = result[0];
+    return {
+      id: row.id,
+      name: row.name,
+      sku: row.sku,
+      barcode: row.barcode,
+      description: row.description,
+      productType: row.productType,
+      requiresSerial: row.requiresSerial,
+      unitId: row.unitId,
+      categoryId: row.categoryId,
+      brandId: row.brandId,
+      hasWarranty: row.hasWarranty,
+      warrantyMonths: row.warrantyMonths,
+      isActive: row.isActive,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      erpProductCode: row.erpProductCode,
+      unit: row.unit,
+      category: row.category,
+      brand: row.brand,
+    };
+  }
+
   // Purchase Order Receipt tracking
   async getReceiptsByOC(purchaseOrderNumber: string): Promise<PurchaseOrderReceipt[]> {
     return await db.select().from(purchaseOrderReceipts)
@@ -1294,6 +1511,240 @@ export class DatabaseStorage implements IStorage {
       totalStock: Number(r.totalStock),
       productCount: Number(r.productCount),
     }));
+  }
+  // ── Cost Center sub-sections (read-only) ──
+
+  async getPurchaseOrdersByCostCenter(costCenter: string): Promise<any[]> {
+    // Get receipts in this CC that have a linked product
+    const receipts = await db.select()
+      .from(purchaseOrderReceipts)
+      .where(and(
+        eq(purchaseOrderReceipts.costCenter, costCenter),
+        sql`${purchaseOrderReceipts.productId} IS NOT NULL`
+      ))
+      .orderBy(asc(purchaseOrderReceipts.purchaseOrderNumber), asc(purchaseOrderReceipts.purchaseOrderLine));
+
+    if (receipts.length === 0) return [];
+
+    // Group by purchaseOrderNumber
+    const ocMap = new Map<string, any>();
+
+    for (const receipt of receipts) {
+      if (!ocMap.has(receipt.purchaseOrderNumber)) {
+        ocMap.set(receipt.purchaseOrderNumber, {
+          purchaseOrderNumber: receipt.purchaseOrderNumber,
+          products: [],
+        });
+      }
+
+      const product = receipt.productId ? await this.getProduct(receipt.productId) : null;
+
+      ocMap.get(receipt.purchaseOrderNumber)!.products.push({
+        productId: receipt.productId,
+        name: product?.name || null,
+        sku: product?.sku || null,
+        barcode: product?.barcode || null,
+        erpProductCode: product?.erpProductCode || null,
+        requiresSerial: product?.requiresSerial || false,
+        orderedQuantity: Number(receipt.orderedQuantity),
+        receivedQuantity: Number(receipt.receivedQuantity),
+        unitPrice: receipt.unitPrice ? Number(receipt.unitPrice) : null,
+      });
+    }
+
+    return Array.from(ocMap.values());
+  }
+
+  async getProductsByCostCenter(costCenter: string): Promise<any[]> {
+    // Get all warehouses for this CC
+    const ccWarehouses = await db.select()
+      .from(warehouses)
+      .where(eq(warehouses.costCenter, costCenter));
+    const warehouseIds = ccWarehouses.map(w => w.id);
+
+    if (warehouseIds.length === 0) return [];
+
+    // Get inventory items with stock > 0 in these warehouses
+    const invItems = await db.select({
+      productId: inventory.productId,
+      warehouseId: inventory.warehouseId,
+      quantity: inventory.quantity,
+    })
+    .from(inventory)
+    .where(and(
+      inArray(inventory.warehouseId, warehouseIds),
+      sql`${inventory.quantity} > 0`
+    ));
+
+    if (invItems.length === 0) return [];
+
+    // Get unique product IDs with stock
+    const productIdsWithStock = [...new Set(invItems.map(i => i.productId))];
+
+    // Filter: only products that have at least one receipt in this CC
+    const linkedReceipts = await db.select()
+      .from(purchaseOrderReceipts)
+      .where(and(
+        eq(purchaseOrderReceipts.costCenter, costCenter),
+        inArray(purchaseOrderReceipts.productId, productIdsWithStock)
+      ));
+
+    const productIdsWithReceipts = [...new Set(linkedReceipts.map(r => r.productId!))];
+    if (productIdsWithReceipts.length === 0) return [];
+
+    const result = [];
+
+    for (const productId of productIdsWithReceipts) {
+      const product = await this.getProduct(productId);
+      if (!product) continue;
+
+      // Summary: total stock across all warehouses
+      const productInventory = invItems.filter(i => i.productId === productId && i.quantity > 0);
+      const totalStock = productInventory.reduce((sum, i) => sum + i.quantity, 0);
+      const warehouseCount = productInventory.length;
+
+      // Count linked OCs
+      const productReceipts = linkedReceipts.filter(r => r.productId === productId);
+      const ocCount = new Set(productReceipts.map(r => r.purchaseOrderNumber)).size;
+
+      // Current price (current month/year)
+      const currentPrice = await this.getCurrentProductPrice(productId);
+
+      // Last reception date (MAX updatedAt from receipts for this product in this CC)
+      const lastReceptionDate = productReceipts.reduce((max, r) => {
+        const d = r.updatedAt;
+        return d > max ? d : max;
+      }, productReceipts[0]?.updatedAt || new Date(0));
+
+      result.push({
+        productId,
+        name: product.name,
+        sku: product.sku,
+        barcode: product.barcode,
+        erpProductCode: product.erpProductCode,
+        requiresSerial: product.requiresSerial,
+        totalStock,
+        warehouseCount,
+        ocCount,
+        currentPrice: currentPrice ? Number(currentPrice.price) : null,
+        lastReceptionDate,
+      });
+    }
+
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async getProductDetailByCostCenter(costCenter: string, productId: number): Promise<any | null> {
+    const product = await this.getProduct(productId);
+    if (!product) return null;
+
+    // Get all warehouses for this CC
+    const ccWarehouses = await db.select()
+      .from(warehouses)
+      .where(eq(warehouses.costCenter, costCenter));
+    const warehouseIds = ccWarehouses.map(w => w.id);
+    if (warehouseIds.length === 0) return null;
+
+    // Distribution by warehouse
+    const invItems = await db.select({
+      warehouseId: inventory.warehouseId,
+      quantity: inventory.quantity,
+    })
+    .from(inventory)
+    .where(and(
+      inArray(inventory.warehouseId, warehouseIds),
+      eq(inventory.productId, productId),
+      sql`${inventory.quantity} > 0`
+    ));
+
+    const warehouseDistribution = invItems.map(inv => {
+      const wh = ccWarehouses.find(w => w.id === inv.warehouseId);
+      return {
+        warehouseId: inv.warehouseId,
+        warehouseName: wh?.name || '',
+        warehouseType: wh?.warehouseType === 'main' ? 'Principal' : (wh?.subWarehouseType?.toUpperCase() || 'Sub-bodega'),
+        quantity: inv.quantity,
+      };
+    });
+
+    // Linked OCs
+    const receipts = await db.select()
+      .from(purchaseOrderReceipts)
+      .where(and(
+        eq(purchaseOrderReceipts.costCenter, costCenter),
+        eq(purchaseOrderReceipts.productId, productId)
+      ))
+      .orderBy(asc(purchaseOrderReceipts.purchaseOrderNumber), asc(purchaseOrderReceipts.purchaseOrderLine));
+
+    const purchaseOrders = receipts.map(r => ({
+      purchaseOrderNumber: r.purchaseOrderNumber,
+      purchaseOrderLine: r.purchaseOrderLine,
+      codprod: r.codprod,
+      orderedQuantity: Number(r.orderedQuantity),
+      receivedQuantity: Number(r.receivedQuantity),
+      unitPrice: r.unitPrice ? Number(r.unitPrice) : null,
+      updatedAt: r.updatedAt,
+    }));
+
+    // Current price
+    const currentPrice = await this.getCurrentProductPrice(productId);
+
+    // Last reception date
+    const lastReceptionDate = receipts.length > 0
+      ? receipts.reduce((max, r) => r.updatedAt > max ? r.updatedAt : max, receipts[0].updatedAt)
+      : null;
+
+    // Serials with traceability (only if requiresSerial)
+    let serials: any[] = [];
+    if (product.requiresSerial) {
+      // Get active serials in CC warehouses, JOIN with inventoryMovements via movementId
+      for (const wId of warehouseIds) {
+        const whSerials = await db.select({
+          id: productSerials.id,
+          serialNumber: productSerials.serialNumber,
+          warehouseId: productSerials.warehouseId,
+          status: productSerials.status,
+          movementId: productSerials.movementId,
+          // From inventoryMovements (left join)
+          purchaseOrderNumber: inventoryMovements.purchaseOrderNumber,
+          movementCreatedAt: inventoryMovements.createdAt,
+        })
+        .from(productSerials)
+        .leftJoin(inventoryMovements, eq(productSerials.movementId, inventoryMovements.id))
+        .where(and(
+          eq(productSerials.productId, productId),
+          eq(productSerials.warehouseId, wId),
+          eq(productSerials.status, 'active')
+        ))
+        .orderBy(asc(productSerials.serialNumber));
+
+        const wh = ccWarehouses.find(w => w.id === wId);
+        for (const s of whSerials) {
+          serials.push({
+            serialNumber: s.serialNumber,
+            warehouseId: s.warehouseId,
+            warehouseName: wh?.name || '',
+            purchaseOrderNumber: s.purchaseOrderNumber || null,
+            dateIngress: s.movementCreatedAt || null,
+            status: s.status,
+          });
+        }
+      }
+    }
+
+    return {
+      productId,
+      name: product.name,
+      sku: product.sku,
+      barcode: product.barcode,
+      erpProductCode: product.erpProductCode,
+      requiresSerial: product.requiresSerial,
+      currentPrice: currentPrice ? Number(currentPrice.price) : null,
+      lastReceptionDate,
+      warehouseDistribution,
+      purchaseOrders,
+      serials: product.requiresSerial ? serials : undefined,
+    };
   }
 }
 

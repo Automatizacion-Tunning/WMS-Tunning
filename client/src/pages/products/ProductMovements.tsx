@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, ArrowRightLeft, Package, TrendingUp, TrendingDown, Warehouse, Building2, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 import { apiRequest } from "@/lib/queryClient";
 import type { InventoryMovementWithDetails, InventoryWithDetails } from "@shared/schema";
 
@@ -23,8 +24,10 @@ let nextItemId = 1;
 export default function ProductMovements() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAdmin } = usePermissions();
 
   // Form state
+  const [selectedCC, setSelectedCC] = useState("");
   const [sourceWarehouseId, setSourceWarehouseId] = useState(0);
   const [sameCostCenter, setSameCostCenter] = useState(true);
   const [destinationWarehouseId, setDestinationWarehouseId] = useState(0);
@@ -43,10 +46,22 @@ export default function ProductMovements() {
     queryKey: ["/api/inventory-movements"],
   });
 
-  // Bodegas con stock (para origen)
+  // Cost centers that have warehouses with stock
+  const costCentersWithStock = useMemo(() => {
+    const ccSet = new Set<string>();
+    inventoryData.filter(inv => inv.quantity > 0).forEach(inv => {
+      const cc = (inv.warehouse as any).costCenter;
+      if (cc) ccSet.add(cc);
+    });
+    return [...ccSet].sort();
+  }, [inventoryData]);
+
+  // Bodegas con stock (para origen), filtradas por CC seleccionado
   const sourceBodegas = useMemo(() => {
     const map = new Map<number, { id: number; name: string; costCenter: string; productCount: number }>();
     inventoryData.filter(inv => inv.quantity > 0).forEach(inv => {
+      const cc = (inv.warehouse as any).costCenter;
+      if (selectedCC && cc !== selectedCC) return;
       const existing = map.get(inv.warehouseId);
       if (existing) {
         existing.productCount++;
@@ -54,13 +69,13 @@ export default function ProductMovements() {
         map.set(inv.warehouseId, {
           id: inv.warehouse.id,
           name: inv.warehouse.name,
-          costCenter: (inv.warehouse as any).costCenter,
+          costCenter: cc,
           productCount: 1,
         });
       }
     });
     return Array.from(map.values());
-  }, [inventoryData]);
+  }, [inventoryData, selectedCC]);
 
   // CC de la bodega origen
   const sourceCostCenter = useMemo(() => {
@@ -74,10 +89,12 @@ export default function ProductMovements() {
       .filter((w: any) => {
         if (w.id === sourceWarehouseId) return false;
         if (w.isActive === false) return false;
+        // Despacho solo visible para admin
+        if (w.subWarehouseType === 'despacho' && !isAdmin) return false;
         return sameCostCenter ? w.costCenter === sourceCostCenter : w.costCenter !== sourceCostCenter;
       })
-      .map((w: any) => ({ id: w.id, name: w.name, costCenter: w.costCenter }));
-  }, [sourceWarehouseId, warehouses, sameCostCenter, sourceCostCenter]);
+      .map((w: any) => ({ id: w.id, name: w.name, costCenter: w.costCenter, subWarehouseType: w.subWarehouseType }));
+  }, [sourceWarehouseId, warehouses, sameCostCenter, sourceCostCenter, isAdmin]);
 
   // Productos con stock en la bodega origen
   const productsInSource = useMemo(() => {
@@ -100,14 +117,26 @@ export default function ProductMovements() {
     return productsInSource.filter(p => !selectedProductIds.has(p.productId));
   }, [productsInSource, selectedProductIds]);
 
-  // Destino es integrador?
-  const isDestinationIntegrador = useMemo(() => {
-    if (!destinationWarehouseId) return false;
+  // Destino es tipo especial?
+  const destinationSubType = useMemo(() => {
+    if (!destinationWarehouseId) return null;
     const dest = (warehouses as any[]).find((w: any) => w.id === destinationWarehouseId);
-    return dest?.subWarehouseType === 'integrador';
+    return dest?.subWarehouseType || null;
   }, [destinationWarehouseId, warehouses]);
+  const isDestinationIntegrador = destinationSubType === 'integrador';
+  const isDestinationGarantia = destinationSubType === 'garantia';
+  const isDestinationDespacho = destinationSubType === 'despacho';
 
   // Handlers
+  const handleCCChange = (val: string) => {
+    setSelectedCC(val === "all" ? "" : val);
+    setSourceWarehouseId(0);
+    setSameCostCenter(true);
+    setDestinationWarehouseId(0);
+    setItems([]);
+    setReason("");
+  };
+
   const handleSourceChange = (val: string) => {
     setSourceWarehouseId(parseInt(val));
     setSameCostCenter(true);
@@ -206,8 +235,27 @@ export default function ProductMovements() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Fila 1: Origen, Toggle CC, Destino */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Fila 1: CC, Origen, Toggle CC, Destino */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              {/* Centro de Costo */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Building2 className="w-4 h-4" />
+                  Centro de Costo
+                </label>
+                <Select value={selectedCC || "all"} onValueChange={handleCCChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos los CC" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los centros</SelectItem>
+                    {costCentersWithStock.map((cc) => (
+                      <SelectItem key={cc} value={cc}>{cc}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Bodega Origen */}
               <div className="space-y-1.5">
                 <label className="text-sm font-medium flex items-center gap-2">
@@ -221,7 +269,7 @@ export default function ProductMovements() {
                   <SelectContent>
                     {sourceBodegas.map((b) => (
                       <SelectItem key={b.id} value={b.id.toString()}>
-                        {b.name} — {b.costCenter} ({b.productCount} prod.)
+                        {b.name} {!selectedCC && `— ${b.costCenter}`} ({b.productCount} prod.)
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -276,7 +324,11 @@ export default function ProductMovements() {
                     <SelectContent>
                       {destinationBodegas.map((b) => (
                         <SelectItem key={b.id} value={b.id.toString()}>
-                          {b.name} — {b.costCenter}
+                          <span className="flex items-center gap-2">
+                            {b.name} — {b.costCenter}
+                            {b.subWarehouseType === 'garantia' && <Badge variant="secondary" className="text-[10px] bg-amber-100 text-amber-800 px-1 py-0">Garantía</Badge>}
+                            {b.subWarehouseType === 'despacho' && <Badge variant="secondary" className="text-[10px] bg-blue-100 text-blue-800 px-1 py-0">Despacho</Badge>}
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -304,6 +356,28 @@ export default function ProductMovements() {
                   <TrendingDown className="w-4 h-4 text-amber-400 shrink-0" />
                   <span className="text-amber-200 font-medium">Salida a Integrador</span>
                   <span className="text-amber-400/80">— Los productos saldran del inventario de {sourceCostCenter}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Indicador garantía */}
+            {destinationWarehouseId > 0 && isDestinationGarantia && (
+              <div className="p-3 bg-amber-950/40 border border-amber-700 rounded-lg">
+                <div className="flex items-center gap-2 text-xs">
+                  <TrendingDown className="w-4 h-4 text-amber-300 shrink-0" />
+                  <span className="text-amber-200 font-medium">Envío a Garantía</span>
+                  <span className="text-amber-400/80">— Los productos quedarán en revisión por garantía y no estarán disponibles</span>
+                </div>
+              </div>
+            )}
+
+            {/* Indicador despacho */}
+            {destinationWarehouseId > 0 && isDestinationDespacho && (
+              <div className="p-3 bg-blue-950/40 border border-blue-700 rounded-lg">
+                <div className="flex items-center gap-2 text-xs">
+                  <TrendingDown className="w-4 h-4 text-blue-300 shrink-0" />
+                  <span className="text-blue-200 font-medium">Despacho a Cliente</span>
+                  <span className="text-blue-400/80">— Los productos se registrarán como entregados al cliente</span>
                 </div>
               </div>
             )}
@@ -427,7 +501,11 @@ export default function ProductMovements() {
                         ? "Procesando..."
                         : isDestinationIntegrador
                           ? `Registrar Salida (${validItems.length})`
-                          : `Realizar Traspaso (${validItems.length})`}
+                          : isDestinationGarantia
+                            ? `Enviar a Garantía (${validItems.length})`
+                            : isDestinationDespacho
+                              ? `Registrar Despacho (${validItems.length})`
+                              : `Realizar Traspaso (${validItems.length})`}
                     </Button>
                   </div>
                 )}

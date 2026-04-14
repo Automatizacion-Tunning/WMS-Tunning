@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Imprimir Seriales</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: white; }
+    @page {
+      size: 62mm 50mm;
+      margin: 0;
+    }
+    .qr-label {
+      width: 62mm;
+      height: 50mm;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1mm;
+      padding: 3mm 2mm;
+      page-break-after: always;
+      background: white;
+    }
+    .qr-label:last-child {
+      page-break-after: avoid;
+    }
+    .qr-label img {
+      width: 28mm;
+      height: 28mm;
+    }
+    .qr-sku {
+      font-size: 10pt;
+      font-weight: bold;
+      font-family: monospace;
+      color: black;
+      margin-top: 1mm;
+    }
+    .qr-name {
+      font-size: 6pt;
+      color: black;
+      text-align: center;
+      max-width: 58mm;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="qr-label">
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=http%3A%2F%2Flocalhost%3A5000%2Fproducto%2F1" alt="QR" />
+    <p class="qr-sku">65432</p>
+    <p class="qr-name">S/N: 65432</p>
+  </div>
+  <div class="qr-label">
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=http%3A%2F%2Flocalhost%3A5000%2Fproducto%2F1" alt="QR" />
+    <p class="qr-sku">9876543</p>
+    <p class="qr-name">S/N: 9876543</p>
+  </div>
+  <script>
+    let loaded = 0;
+    const imgs = document.querySelectorAll('img');
+    imgs.forEach(img => {
+      if (img.complete) { loaded++; }
+      else { img.onload = () => { loaded++; if (loaded >= imgs.length) setTimeout(() => window.print(), 300); }; }
+    });
+    if (loaded >= imgs.length) setTimeout(() => window.print(), 300);
+  </script>
+</body>
+</html>

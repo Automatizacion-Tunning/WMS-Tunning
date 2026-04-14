@@ -16,6 +16,7 @@ const pageNames: Record<string, { title: string; subtitle: string }> = {
   "/orders/purchase-order": { title: "Órdenes de Compra", subtitle: "Recepción de productos por OC" },
   "/orders/transfer-orders": { title: "Órdenes de Traspaso", subtitle: "Gestión de traspasos entre bodegas" },
   "/roles": { title: "Roles y Permisos", subtitle: "Gestión de roles del sistema" },
+  "/traceability": { title: "Trazabilidad", subtitle: "CC → Bodegas → Productos → OC + Series" },
   "/products/management": { title: "Gestión de Productos", subtitle: "Administración del catálogo" },
 };
 

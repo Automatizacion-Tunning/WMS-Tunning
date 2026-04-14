@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Package, ArrowUpCircle, Scan, Info, FileText } from "lucide-react";
 import SimpleProductEntryForm from "@/components/forms/SimpleProductEntryForm";
+import { printLabels } from "@/components/modals/QRLabelModal";
 import type { InventoryMovementWithDetails } from "@shared/schema";
 
 export default function StockEntry() {
@@ -39,6 +40,26 @@ export default function StockEntry() {
     if (!val) return "-";
     const num = parseFloat(val);
     return "$" + num.toLocaleString("es-CL", { minimumFractionDigits: 0 });
+  };
+
+  const handleEntrySuccess = (printData?: { productId: number; productName: string; sku: string | null; serialNumbers?: string[] }) => {
+    setIsCreateDialogOpen(false);
+
+    if (printData) {
+      if (printData.serialNumbers && printData.serialNumbers.length > 0) {
+        printLabels(printData.serialNumbers.map(sn => ({
+          id: printData.productId,
+          name: `${printData.productName} — S/N: ${sn}`,
+          sku: sn,
+        })));
+      } else {
+        printLabels([{
+          id: printData.productId,
+          name: printData.productName,
+          sku: printData.sku,
+        }]);
+      }
+    }
   };
 
   if (isLoading) {
@@ -92,7 +113,7 @@ export default function StockEntry() {
               </DialogDescription>
             </DialogHeader>
             <SimpleProductEntryForm
-              onSuccess={() => setIsCreateDialogOpen(false)}
+              onSuccess={handleEntrySuccess}
               onCancel={() => setIsCreateDialogOpen(false)}
             />
           </DialogContent>
@@ -227,6 +248,7 @@ export default function StockEntry() {
           )}
         </CardContent>
       </Card>
+
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Package, MapPin, Search, Filter, Eye, X, ChevronDown, ChevronRight, Building2, Edit } from "lucide-react";
+import { Package, MapPin, Search, Filter, Eye, X, ChevronDown, ChevronRight, Building2, Edit, DollarSign } from "lucide-react";
 import { Warehouse, InventoryWithDetails, insertWarehouseSchema, type InsertWarehouse } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -46,14 +46,18 @@ export default function WarehouseManagement() {
     queryKey: ["/api/inventory"],
   });
 
+  // Obtener valores de bodega (precio mes actual)
+  const { data: warehouseValues = [] } = useQuery<{ warehouseId: number; warehouseValue: number }[]>({
+    queryKey: ["/api/warehouse-values"],
+  });
+
+  // Mapa de warehouseId -> valor
+  const valueMap = new Map(warehouseValues.map(v => [v.warehouseId, v.warehouseValue]));
+
   // Procesar datos para mostrar bodegas con inventario
   const warehousesWithInventory: WarehouseWithInventory[] = warehouses.map(warehouse => {
     const warehouseInventory = allInventory.filter(inv => inv.warehouseId === warehouse.id);
-    const totalValue = warehouseInventory.reduce((sum, inv) => {
-      // El precio será 0 por ahora ya que los precios son por movimiento, no globales
-      const recentPrice = 0;
-      return sum + (inv.quantity * recentPrice);
-    }, 0);
+    const totalValue = valueMap.get(warehouse.id) || 0;
 
     return {
       ...warehouse,
@@ -237,8 +241,11 @@ export default function WarehouseManagement() {
                           Centro de Costo: {group.costCenter}
                         </div>
                         <div className="text-sm text-muted-foreground font-normal">
-                          {group.subWarehouses.length + 1} bodegas • 
+                          {group.subWarehouses.length + 1} bodegas •
                           {" "}{group.mainWarehouse.inventoryCount + group.subWarehouses.reduce((sum, w) => sum + w.inventoryCount, 0)} productos únicos
+                        </div>
+                        <div className="text-sm font-semibold text-amber-600">
+                          Valor total: ${Number((warehouses.find(w => w.costCenter === group.costCenter && w.warehouseType === "main") as any)?.totalValue || 0).toLocaleString("es-CL", { maximumFractionDigits: 0 })}
                         </div>
                       </div>
                     </div>
@@ -292,7 +299,7 @@ export default function WarehouseManagement() {
                           {group.mainWarehouse.location || "Sin ubicación"}
                         </div>
                         
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                           <div className="text-center">
                             <div className="text-xl font-bold text-blue-600">
                               {group.mainWarehouse.inventoryCount}
@@ -304,6 +311,12 @@ export default function WarehouseManagement() {
                               {group.mainWarehouse.inventory.reduce((sum, inv) => sum + inv.quantity, 0)}
                             </div>
                             <div className="text-xs text-muted-foreground">Unidades</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xl font-bold text-amber-600">
+                              ${group.mainWarehouse.totalValue.toLocaleString("es-CL", { maximumFractionDigits: 0 })}
+                            </div>
+                            <div className="text-xs text-muted-foreground">Valor Bodega</div>
                           </div>
                         </div>
                       </CardContent>
@@ -336,7 +349,10 @@ export default function WarehouseManagement() {
                                   >
                                     <Edit className="h-3 w-3" />
                                   </Button>
-                                  <Badge variant="secondary" className="text-xs">
+                                  <Badge variant="secondary" className={`text-xs ${
+                                    subWarehouse.subWarehouseType === 'garantia' ? 'bg-amber-100 text-amber-800' :
+                                    subWarehouse.subWarehouseType === 'despacho' ? 'bg-blue-100 text-blue-800' : ''
+                                  }`}>
                                     {subWarehouse.subWarehouseType?.toUpperCase() || "SUB"}
                                   </Badge>
                                 </div>
@@ -351,6 +367,9 @@ export default function WarehouseManagement() {
                                 <span className="font-medium">
                                   {subWarehouse.inventory.reduce((sum, inv) => sum + inv.quantity, 0)} unidades
                                 </span>
+                              </div>
+                              <div className="text-xs font-semibold text-amber-600">
+                                Valor: ${subWarehouse.totalValue.toLocaleString("es-CL", { maximumFractionDigits: 0 })}
                               </div>
                             </CardContent>
                           </Card>
@@ -386,7 +405,10 @@ export default function WarehouseManagement() {
                 <Package className="h-6 w-6" />
                 Detalle de {selectedWarehouseDetail?.name}
               </div>
-              <Badge variant={selectedWarehouseDetail?.warehouseType === "main" ? "default" : "secondary"}>
+              <Badge variant={selectedWarehouseDetail?.warehouseType === "main" ? "default" : "secondary"} className={
+                selectedWarehouseDetail?.subWarehouseType === 'garantia' ? 'bg-amber-100 text-amber-800' :
+                selectedWarehouseDetail?.subWarehouseType === 'despacho' ? 'bg-blue-100 text-blue-800' : ''
+              }>
                 {selectedWarehouseDetail?.warehouseType === "main" ? "PRINCIPAL" : selectedWarehouseDetail?.subWarehouseType?.toUpperCase() || "SUB"}
               </Badge>
             </DialogTitle>
@@ -671,6 +693,8 @@ function EditWarehouseDialog({
                         <SelectItem value="plataforma">PLATAFORMA</SelectItem>
                         <SelectItem value="pem">PEM</SelectItem>
                         <SelectItem value="integrador">INTEGRADOR</SelectItem>
+                        <SelectItem value="garantia">GARANTIA</SelectItem>
+                        <SelectItem value="despacho">DESPACHO</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
