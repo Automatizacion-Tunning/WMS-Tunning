@@ -727,10 +727,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Guía de despacho obligatoria cuando destino es bodega despacho
-      if (isDespacho && (!dispatchGuideNumber || !dispatchGuideNumber.trim())) {
-        return res.status(400).json({ message: "El número de guía de despacho es obligatorio para movimientos a bodega de despacho" });
-      }
+      // Guía de despacho opcional para movimientos a bodega de despacho
 
       // Ejecutar movimientos por cada item
       const results = [];

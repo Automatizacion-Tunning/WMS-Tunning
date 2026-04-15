@@ -199,19 +199,19 @@ export default function DispatchPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const validItems = items.filter(i => i.productId && i.quantity >= 1);
-    if (!sourceWarehouseId || !destinationWarehouseId || validItems.length === 0 || !dispatchGuideNumber.trim()) return;
+    if (!sourceWarehouseId || !destinationWarehouseId || validItems.length === 0) return;
     dispatchMutation.mutate({
       sourceWarehouseId,
       destinationWarehouseId,
       items: validItems.map(i => ({ productId: i.productId, quantity: i.quantity })),
       reason: reason || undefined,
-      dispatchGuideNumber: dispatchGuideNumber.trim(),
+      dispatchGuideNumber: dispatchGuideNumber.trim() || undefined,
     });
   };
 
   const validItems = items.filter(i => i.productId && i.quantity >= 1);
   const canSubmit = sourceWarehouseId && destinationWarehouseId && validItems.length > 0
-    && dispatchGuideNumber.trim() && !dispatchMutation.isPending;
+    && !dispatchMutation.isPending;
 
   // Movimientos de despacho (filtrados por reason que contiene "Despacho" o bodega tipo despacho)
   const dispatchMovements = useMemo(() => {
