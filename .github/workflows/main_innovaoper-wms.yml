@@ -34,9 +34,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Prune dev dependencies
-        run: npm prune --omit=dev
-
       - name: Stage deployment package
         run: |
           mkdir -p deploy
