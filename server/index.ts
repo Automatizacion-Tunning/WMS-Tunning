@@ -15,7 +15,18 @@ if (isProduction && !process.env.SESSION_SECRET) {
 
 // --- Headers de seguridad ---
 app.use(helmet({
-  contentSecurityPolicy: isProduction ? undefined : false, // Desactivar CSP en desarrollo para Vite HMR
+  contentSecurityPolicy: isProduction ? {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+    },
+  } : false,
 }));
 
 // --- Rate limiting global ---
