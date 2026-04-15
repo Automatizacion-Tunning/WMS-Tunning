@@ -40,7 +40,7 @@ function printLabels(products: QRProduct[]) {
   const labelsHtml = products.map((p) => {
     // Si tiene serialNumber, apuntar a /serie/{serial}. Si no, a /producto/{id}
     const url = p.serialNumber
-      ? `${window.location.origin}/serie/${encodeURIComponent(p.serialNumber)}`
+      ? `${window.location.origin}/serie/${p.id}/${encodeURIComponent(p.serialNumber)}`
       : `${window.location.origin}/producto/${p.id}`;
     const qrSvg = generateQRSvg(url);
     return `

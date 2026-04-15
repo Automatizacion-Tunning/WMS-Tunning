@@ -63,7 +63,7 @@ function Router() {
         <Route path="/roles" component={RolesManagement} />
         <Route path="/despacho" component={DispatchPage} />
         <Route path="/producto/:id" component={ProductDetail} />
-        <Route path="/serie/:serialNumber" component={SerialDetail} />
+        <Route path="/serie/:productId/:serialNumber" component={SerialDetail} />
         <Route path="/test-barcode" component={TestBarcode} />
         <Route component={NotFound} />
       </Switch>

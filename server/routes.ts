@@ -853,12 +853,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Hoja de Vida de un serial individual
-  app.get("/api/serials/:serialNumber/vida", requirePermission("products.view"), async (req, res) => {
+  app.get("/api/serials/:productId/:serialNumber/vida", requirePermission("products.view"), async (req, res) => {
     try {
+      const productId = parseInt(req.params.productId);
       const serialNumber = req.params.serialNumber;
 
-      // Buscar el serial con su bodega
-      const serial = await storage.getSerialByNumber(serialNumber);
+      // Buscar el serial con su bodega, filtrado por producto
+      const serial = await storage.getSerialByProductAndNumber(productId, serialNumber);
       if (!serial) {
         return res.status(404).json({ message: "Serial not found" });
       }

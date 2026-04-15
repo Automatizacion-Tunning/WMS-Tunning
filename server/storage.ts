@@ -128,6 +128,7 @@ export interface IStorage {
   getAllProductsWithDetails(): Promise<ProductWithDetails[]>;
   getProductWithDetails(id: number): Promise<ProductWithDetails | undefined>;
   getSerialByNumber(serialNumber: string): Promise<any | undefined>;
+  getSerialByProductAndNumber(productId: number, serialNumber: string): Promise<any | undefined>;
   getAllProductSerials(productId: number): Promise<any[]>;
 
   // Purchase Order Receipt tracking
@@ -659,6 +660,28 @@ export class DatabaseStorage implements IStorage {
     .from(productSerials)
     .innerJoin(warehouses, eq(productSerials.warehouseId, warehouses.id))
     .where(eq(productSerials.serialNumber, serialNumber))
+    .limit(1);
+    return result[0] || undefined;
+  }
+
+  async getSerialByProductAndNumber(productId: number, serialNumber: string): Promise<any | undefined> {
+    const result = await db.select({
+      id: productSerials.id,
+      productId: productSerials.productId,
+      warehouseId: productSerials.warehouseId,
+      serialNumber: productSerials.serialNumber,
+      status: productSerials.status,
+      createdAt: productSerials.createdAt,
+      updatedAt: productSerials.updatedAt,
+      movementId: productSerials.movementId,
+      warehouse: warehouses,
+    })
+    .from(productSerials)
+    .innerJoin(warehouses, eq(productSerials.warehouseId, warehouses.id))
+    .where(and(
+      eq(productSerials.productId, productId),
+      eq(productSerials.serialNumber, serialNumber)
+    ))
     .limit(1);
     return result[0] || undefined;
   }

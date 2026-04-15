@@ -14,14 +14,15 @@ interface SerialVida {
 }
 
 export default function SerialDetail() {
-  const [, params] = useRoute("/serie/:serialNumber");
+  const [, params] = useRoute("/serie/:productId/:serialNumber");
   const { can, isLoading: permLoading } = usePermissions();
 
+  const productId = params?.productId ? parseInt(params.productId) : null;
   const serialNumber = params?.serialNumber ? decodeURIComponent(params.serialNumber) : null;
 
   const { data, isLoading, error } = useQuery<SerialVida>({
-    queryKey: [`/api/serials/${serialNumber}/vida`],
-    enabled: !!serialNumber,
+    queryKey: [`/api/serials/${productId}/${serialNumber}/vida`],
+    enabled: !!productId && !!serialNumber,
   });
 
   if (permLoading || isLoading) {
