@@ -25,7 +25,10 @@ import ProductDetail from "@/pages/products/ProductDetail";
 
 function Router() {
   const { isAuthenticated, isLoading, login } = useAuth();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+
+  // Guardar la URL intentada antes del login para redirigir después
+  const intendedPath = !isAuthenticated && location !== "/" ? location : "/";
 
   if (isLoading) {
     return (
@@ -39,7 +42,7 @@ function Router() {
   }
 
   if (!isAuthenticated) {
-    return <Login onLoginSuccess={(user) => { login(user); navigate("/"); }} />;
+    return <Login onLoginSuccess={(user) => { login(user); navigate(intendedPath); }} />;
   }
 
   return (
