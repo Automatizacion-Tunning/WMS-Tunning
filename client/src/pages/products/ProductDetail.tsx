@@ -81,23 +81,47 @@ export default function ProductDetail() {
     return username || "Desconocido";
   };
 
+  const getWarrantyExpiry = () => {
+    if (!product.hasWarranty || !product.warrantyMonths) return "—";
+    const expiry = new Date(product.createdAt);
+    expiry.setMonth(expiry.getMonth() + product.warrantyMonths);
+    return expiry.toLocaleDateString("es-CL", { year: "numeric", month: "2-digit", day: "2-digit" });
+  };
+
+  const getSerialCostCenter = (serial: any) => {
+    return serial.warehouse?.costCenter || "—";
+  };
+
   const handlePrintProductQR = () => {
-    printLabels([{ id: product.id, name: product.name, sku: product.sku }]);
+    const cc = inventory.length > 0 ? (inventory[0].warehouse?.costCenter || "—") : "—";
+    printLabels([{
+      id: product.id,
+      name: product.name,
+      sku: product.sku,
+      costCenter: cc,
+      warrantyExpiry: getWarrantyExpiry(),
+    }]);
   };
 
   const handlePrintSerialQR = (serial: any) => {
     printLabels([{
       id: product.id,
-      name: `${product.name} — S/N: ${serial.serialNumber}`,
+      name: product.name,
       sku: serial.serialNumber,
+      serialNumber: serial.serialNumber,
+      costCenter: getSerialCostCenter(serial),
+      warrantyExpiry: getWarrantyExpiry(),
     }]);
   };
 
   const handlePrintAllSerialsQR = () => {
     printLabels(serials.map((s: any) => ({
       id: product.id,
-      name: `${product.name} — S/N: ${s.serialNumber}`,
+      name: product.name,
       sku: s.serialNumber,
+      serialNumber: s.serialNumber,
+      costCenter: getSerialCostCenter(s),
+      warrantyExpiry: getWarrantyExpiry(),
     })));
   };
 

@@ -42,21 +42,38 @@ export default function StockEntry() {
     return "$" + num.toLocaleString("es-CL", { minimumFractionDigits: 0 });
   };
 
-  const handleEntrySuccess = (printData?: { productId: number; productName: string; sku: string | null; serialNumbers?: string[] }) => {
+  const handleEntrySuccess = (printData?: any) => {
     setIsCreateDialogOpen(false);
 
     if (printData) {
+      // Calcular fecha de vencimiento de garantía
+      let warrantyExpiry = "—";
+      if (printData.hasWarranty && printData.warrantyMonths) {
+        const expiry = new Date();
+        expiry.setMonth(expiry.getMonth() + printData.warrantyMonths);
+        warrantyExpiry = expiry.toLocaleDateString("es-CL", { year: "numeric", month: "2-digit", day: "2-digit" });
+      }
+
+      const baseData = {
+        costCenter: printData.costCenter || "—",
+        purchaseOrder: printData.purchaseOrder || "—",
+        warrantyExpiry,
+      };
+
       if (printData.serialNumbers && printData.serialNumbers.length > 0) {
-        printLabels(printData.serialNumbers.map(sn => ({
+        printLabels(printData.serialNumbers.map((sn: string) => ({
           id: printData.productId,
-          name: `${printData.productName} — S/N: ${sn}`,
+          name: printData.productName,
           sku: sn,
+          serialNumber: sn,
+          ...baseData,
         })));
       } else {
         printLabels([{
           id: printData.productId,
           name: printData.productName,
           sku: printData.sku,
+          ...baseData,
         }]);
       }
     }

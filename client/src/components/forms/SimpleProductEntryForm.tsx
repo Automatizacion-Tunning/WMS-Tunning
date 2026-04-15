@@ -53,8 +53,19 @@ interface EnrichedOcLine {
   isFullyReceived: boolean;
 }
 
+interface PrintData {
+  productId: number;
+  productName: string;
+  sku: string | null;
+  serialNumbers?: string[];
+  costCenter?: string;
+  purchaseOrder?: string;
+  warrantyMonths?: number;
+  hasWarranty?: boolean;
+}
+
 interface SimpleProductEntryFormProps {
-  onSuccess?: (printData?: { productId: number; productName: string; sku: string | null; serialNumbers?: string[] }) => void;
+  onSuccess?: (printData?: PrintData) => void;
   onCancel?: () => void;
 }
 
@@ -336,6 +347,18 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/metrics"] });
       queryClient.invalidateQueries({ queryKey: ["/api/ordenes-compra", selectedOC, "lines"] });
 
+      // Capturar datos para impresión QR ANTES del reset
+      const printData = selectedProduct ? {
+        productId: selectedProduct.id,
+        productName: selectedProduct.name,
+        sku: selectedProduct.sku || null,
+        serialNumbers: serialNumbers.length > 0 ? [...serialNumbers] : undefined,
+        costCenter: form.getValues("costCenter") || undefined,
+        purchaseOrder: form.getValues("purchaseOrderNumber") || undefined,
+        warrantyMonths: selectedProduct.warrantyMonths || undefined,
+        hasWarranty: selectedProduct.hasWarranty || false,
+      } : undefined;
+
       // Reset line selection but keep OC for batch processing
       setSelectedLine(null);
       setShowCreateProduct(false);
@@ -344,14 +367,6 @@ export default function SimpleProductEntryForm({ onSuccess, onCancel }: SimplePr
       form.setValue("quantity", 1);
       form.setValue("price", 0);
       form.setValue("reason", "");
-      // Preparar datos para impresión QR
-      const printData = selectedProduct ? {
-        productId: selectedProduct.id,
-        productName: selectedProduct.name,
-        sku: selectedProduct.sku || null,
-        serialNumbers: serialNumbers.length > 0 ? [...serialNumbers] : undefined,
-      } : undefined;
-
       setSerialNumbers([]);
       onSuccess?.(printData);
     },

@@ -4,6 +4,10 @@ interface QRProduct {
   id: number;
   name: string;
   sku: string | null;
+  serialNumber?: string;
+  costCenter?: string;
+  purchaseOrder?: string;
+  warrantyExpiry?: string;
 }
 
 interface QRLabelModalProps {
@@ -13,14 +17,11 @@ interface QRLabelModalProps {
   autoPrint?: boolean;
 }
 
-// Tamaño fijo: Mediano 62x50mm — rollo continuo 62mm
+// Tamaño fijo: 62x62mm — rollo continuo 62mm
 const LABEL = {
   width: "62mm",
-  height: "50mm",
+  height: "62mm",
   qrSize: "28mm",
-  skuFont: "10pt",
-  nameFont: "6pt",
-  padding: "3mm 2mm",
 };
 
 function printLabels(products: QRProduct[]) {
@@ -33,8 +34,12 @@ function printLabels(products: QRProduct[]) {
     return `
       <div class="qr-label">
         <img src="${qrImgUrl}" alt="QR" />
-        <p class="qr-sku">${p.sku || "Sin SKU"}</p>
-        <p class="qr-name">${p.name}</p>
+        <table>
+          <tr><td class="lbl">S/N</td><td>${p.serialNumber || p.sku || "—"}</td></tr>
+          <tr><td class="lbl">CC</td><td>${p.costCenter || "—"}</td></tr>
+          <tr><td class="lbl">OC</td><td>${p.purchaseOrder || "—"}</td></tr>
+          <tr><td class="lbl">Gtia</td><td>${p.warrantyExpiry || "—"}</td></tr>
+        </table>
       </div>
     `;
   }).join("");
@@ -59,7 +64,7 @@ function printLabels(products: QRProduct[]) {
           align-items: center;
           justify-content: center;
           gap: 1mm;
-          padding: ${LABEL.padding};
+          padding: 2mm;
           page-break-after: always;
           background: white;
         }
@@ -70,21 +75,23 @@ function printLabels(products: QRProduct[]) {
           width: ${LABEL.qrSize};
           height: ${LABEL.qrSize};
         }
-        .qr-sku {
-          font-size: ${LABEL.skuFont};
-          font-weight: bold;
-          font-family: monospace;
-          color: black;
+        table {
+          width: 56mm;
+          border-collapse: collapse;
           margin-top: 1mm;
         }
-        .qr-name {
-          font-size: ${LABEL.nameFont};
+        td {
+          font-size: 6pt;
+          font-family: Arial, sans-serif;
           color: black;
-          text-align: center;
-          max-width: calc(${LABEL.width} - 4mm);
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
+          padding: 0.3mm 1mm;
+          border: 0.2mm solid #999;
+        }
+        td.lbl {
+          font-weight: bold;
+          width: 10mm;
+          background: #eee;
+          font-size: 5pt;
         }
       </style>
     </head>
@@ -102,7 +109,6 @@ function printLabels(products: QRProduct[]) {
     if (loaded >= total) {
       setTimeout(() => {
         printWindow.print();
-        // Cerrar ventana después de imprimir
         setTimeout(() => printWindow.close(), 1000);
       }, 300);
     }
@@ -123,14 +129,14 @@ function printLabels(products: QRProduct[]) {
 }
 
 export { printLabels };
+export type { QRProduct };
 
-export default function QRLabelModal({ isOpen, onClose, products, autoPrint = false }: QRLabelModalProps) {
+export default function QRLabelModal({ isOpen, onClose, products }: QRLabelModalProps) {
   const hasPrinted = useRef(false);
 
   useEffect(() => {
     if (isOpen && products.length > 0 && !hasPrinted.current) {
       hasPrinted.current = true;
-      // Imprimir directo sin mostrar modal
       const timer = setTimeout(() => {
         printLabels(products);
         onClose();
@@ -142,6 +148,5 @@ export default function QRLabelModal({ isOpen, onClose, products, autoPrint = fa
     }
   }, [isOpen, products, onClose]);
 
-  // No renderiza nada — impresión directa
   return null;
 }
