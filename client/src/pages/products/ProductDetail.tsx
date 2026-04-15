@@ -145,10 +145,6 @@ export default function ProductDetail() {
             </p>
           </div>
         </div>
-        <Button onClick={handlePrintProductQR}>
-          <Printer className="h-4 w-4 mr-2" />
-          Imprimir QR
-        </Button>
       </div>
 
       {/* Información General + Clasificación */}

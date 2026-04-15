@@ -852,6 +852,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Hoja de Vida de un serial individual
+  app.get("/api/serials/:serialNumber/vida", requirePermission("products.view"), async (req, res) => {
+    try {
+      const serialNumber = req.params.serialNumber;
+
+      // Buscar el serial con su bodega
+      const serial = await storage.getSerialByNumber(serialNumber);
+      if (!serial) {
+        return res.status(404).json({ message: "Serial not found" });
+      }
+
+      // Obtener producto con detalles
+      const product = await storage.getProductWithDetails(serial.productId);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+
+      // Obtener movimientos del producto
+      const allMovements = await storage.getInventoryMovementsByProduct(serial.productId);
+
+      // Filtrar: solo el movimiento de ingreso de este serial
+      const serialMovements = allMovements.filter((m: any) => {
+        if (serial.movementId && m.id === serial.movementId) return true;
+        return false;
+      });
+
+      // Obtener OC del movimiento de ingreso
+      let purchaseOrderNumber = null;
+      let costCenter = serial.warehouse?.costCenter || null;
+      if (serial.movementId) {
+        const ingressMovement = allMovements.find((m: any) => m.id === serial.movementId);
+        if (ingressMovement) {
+          purchaseOrderNumber = ingressMovement.purchaseOrderNumber;
+        }
+      }
+
+      res.json({
+        serial: {
+          ...serial,
+          purchaseOrderNumber,
+          costCenter,
+        },
+        product,
+        movements: serialMovements,
+      });
+    } catch (error) {
+      console.error("Error fetching serial vida:", error);
+      res.status(500).json({ message: "Failed to fetch serial life sheet" });
+    }
+  });
+
   app.get("/api/inventory-movements/product/:productId", requirePermission("inventory.view"), async (req, res) => {
     try {
       const movements = await storage.getInventoryMovementsByProduct(parseInt(req.params.productId));

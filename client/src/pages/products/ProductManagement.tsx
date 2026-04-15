@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Package, Tags, Award, Ruler, Clock, Settings, QrCode } from "lucide-react";
+import { Plus, Package, Tags, Award, Ruler, Clock, Settings } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import SimpleProductForm from "@/components/forms/SimpleProductForm";
 import EditProductForm from "@/components/forms/EditProductForm";
@@ -13,7 +13,6 @@ import BrandManagement from "./BrandManagement";
 import UnitManagement from "./UnitManagement";
 import { type ProductWithCurrentPrice } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
-import { printLabels } from "@/components/modals/QRLabelModal";
 
 export default function ProductManagement() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -41,11 +40,8 @@ export default function ProductManagement() {
     return type === "tangible" ? "default" : "secondary";
   };
 
-  const handleCreateProduct = (product?: any) => {
+  const handleCreateProduct = () => {
     setIsCreateDialogOpen(false);
-    if (product) {
-      printLabels([{ id: product.id, name: product.name, sku: product.sku }]);
-    }
   };
 
   const handleEditProduct = (product: ProductWithCurrentPrice) => {
@@ -167,25 +163,13 @@ export default function ProductManagement() {
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            printLabels([{ id: product.id, name: product.name, sku: product.sku }]);
-                          }}
-                          title="Generar etiqueta QR"
-                        >
-                          <QrCode className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditProduct(product)}
-                        >
-                          Editar
-                        </Button>
-                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditProduct(product)}
+                      >
+                        Editar
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>

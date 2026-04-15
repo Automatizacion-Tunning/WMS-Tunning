@@ -22,6 +22,7 @@ import PurchaseOrders from "@/pages/orders/PurchaseOrders";
 import TestBarcode from "@/pages/TestBarcode";
 import DispatchPage from "@/pages/dispatch/DispatchPage";
 import ProductDetail from "@/pages/products/ProductDetail";
+import SerialDetail from "@/pages/products/SerialDetail";
 
 function Router() {
   const { isAuthenticated, isLoading, login } = useAuth();
@@ -62,6 +63,7 @@ function Router() {
         <Route path="/roles" component={RolesManagement} />
         <Route path="/despacho" component={DispatchPage} />
         <Route path="/producto/:id" component={ProductDetail} />
+        <Route path="/serie/:serialNumber" component={SerialDetail} />
         <Route path="/test-barcode" component={TestBarcode} />
         <Route component={NotFound} />
       </Switch>

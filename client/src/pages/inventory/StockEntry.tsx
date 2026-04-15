@@ -60,6 +60,7 @@ export default function StockEntry() {
         warrantyExpiry,
       };
 
+      // Solo imprimir QR si tiene números de serie
       if (printData.serialNumbers && printData.serialNumbers.length > 0) {
         printLabels(printData.serialNumbers.map((sn: string) => ({
           id: printData.productId,
@@ -68,14 +69,8 @@ export default function StockEntry() {
           serialNumber: sn,
           ...baseData,
         })));
-      } else {
-        printLabels([{
-          id: printData.productId,
-          name: printData.productName,
-          sku: printData.sku,
-          ...baseData,
-        }]);
       }
+      // Productos sin serial NO generan QR
     }
   };
 
