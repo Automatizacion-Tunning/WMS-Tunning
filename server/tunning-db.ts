@@ -113,13 +113,18 @@ export async function getOrdenesCompra(params: {
   costCenter?: string;
   estado?: string;
   tipoCategoria?: string;
+  proveedor?: string;
+  fechaOcDesde?: string;
+  fechaOcHasta?: string;
+  fechaEntDesde?: string;
+  fechaEntHasta?: string;
 }): Promise<{ rows: OrdenCompra[]; total: number }> {
   const pool = getTunningPool();
   if (!pool) {
     return { rows: [], total: 0 };
   }
 
-  const { page = 1, pageSize = 50, search, costCenter, estado, tipoCategoria } = params;
+  const { page = 1, pageSize = 50, search, costCenter, estado, tipoCategoria, proveedor, fechaOcDesde, fechaOcHasta, fechaEntDesde, fechaEntHasta } = params;
   const offset = (page - 1) * pageSize;
 
   try {
@@ -149,6 +154,36 @@ export async function getOrdenesCompra(params: {
       conditions.push(`tipo = '1'`);
     } else if (tipoCategoria === "servicios") {
       conditions.push(`(tipo IS NULL OR tipo <> '1')`);
+    }
+
+    if (proveedor) {
+      conditions.push(`codaux = $${paramIdx}`);
+      values.push(proveedor);
+      paramIdx++;
+    }
+
+    if (fechaOcDesde) {
+      conditions.push(`fechaoc::date >= $${paramIdx}::date`);
+      values.push(fechaOcDesde);
+      paramIdx++;
+    }
+
+    if (fechaOcHasta) {
+      conditions.push(`fechaoc::date <= $${paramIdx}::date`);
+      values.push(fechaOcHasta);
+      paramIdx++;
+    }
+
+    if (fechaEntDesde) {
+      conditions.push(`fechaent::date >= $${paramIdx}::date`);
+      values.push(fechaEntDesde);
+      paramIdx++;
+    }
+
+    if (fechaEntHasta) {
+      conditions.push(`fechaent::date <= $${paramIdx}::date`);
+      values.push(fechaEntHasta);
+      paramIdx++;
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -292,6 +327,24 @@ export async function getOrdenCompraLinesByOCandCC(numoc: string, codicc: string
     return result.rows;
   } catch (error) {
     console.error('[TUNNING-DB] Error al obtener lineas por OC y CC:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtener proveedores unicos de ordenes de compra
+ */
+export async function getOrdenesCompraProveedores(): Promise<Array<{codaux: string, nomaux: string}>> {
+  const pool = getTunningPool();
+  if (!pool) return [];
+
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT codaux, nomaux FROM pav_inn_ordencom WHERE codaux IS NOT NULL ORDER BY nomaux`
+    );
+    return result.rows.map((r: any) => ({ codaux: r.codaux, nomaux: r.nomaux || '' }));
+  } catch (error) {
+    console.error('[TUNNING-DB] Error al obtener proveedores:', error);
     return [];
   }
 }

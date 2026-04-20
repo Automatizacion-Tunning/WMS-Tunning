@@ -1509,8 +1509,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const costCenter = (req.query.costCenter as string) || undefined;
       const estado = (req.query.estado as string) || undefined;
       const tipoCategoria = (req.query.tipoCategoria as string) || undefined;
+      const proveedor = (req.query.proveedor as string) || undefined;
+      const fechaOcDesde = (req.query.fechaOcDesde as string) || undefined;
+      const fechaOcHasta = (req.query.fechaOcHasta as string) || undefined;
+      const fechaEntDesde = (req.query.fechaEntDesde as string) || undefined;
+      const fechaEntHasta = (req.query.fechaEntHasta as string) || undefined;
 
-      const result = await getOrdenesCompra({ page, pageSize, search, costCenter, estado, tipoCategoria });
+      const result = await getOrdenesCompra({ page, pageSize, search, costCenter, estado, tipoCategoria, proveedor, fechaOcDesde, fechaOcHasta, fechaEntDesde, fechaEntHasta });
 
       // Enriquecer con datos locales de recepcion
       if (result.rows.length > 0) {
@@ -1540,6 +1545,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error al obtener ordenes de compra:", error);
       res.status(500).json({ message: "Error al obtener órdenes de compra" });
+    }
+  });
+
+  app.get("/api/ordenes-compra/providers", requirePermission("orders.view_purchase"), async (req, res) => {
+    try {
+      const { getOrdenesCompraProveedores } = await import("./tunning-db");
+      const providers = await getOrdenesCompraProveedores();
+      res.json(providers);
+    } catch (error: any) {
+      console.error("Error al obtener proveedores:", error);
+      res.status(500).json({ message: "Error al obtener proveedores" });
     }
   });
 
