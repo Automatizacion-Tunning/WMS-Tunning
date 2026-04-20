@@ -12,7 +12,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Plus, Building2, MapPin, ChevronRight, ChevronDown, Package, FileText, Loader2, Search, X } from "lucide-react";
+import { Plus, Building2, MapPin, ChevronRight, ChevronDown, Package, FileText, Loader2, Search, X, ExternalLink } from "lucide-react";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { z } from "zod";
@@ -173,6 +174,7 @@ function ProductDetailModal({
                         <TableHead>OC Origen</TableHead>
                         <TableHead>Fecha Ingreso</TableHead>
                         <TableHead>Estado</TableHead>
+                        <TableHead>Hoja de Vida</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -190,6 +192,13 @@ function ProductDetailModal({
                               <Badge variant="outline" className="text-xs border-green-500 text-green-500">
                                 {s.status === "active" ? "Activo" : s.status}
                               </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Link href={`/serie/${productId}/${encodeURIComponent(s.serialNumber)}`}>
+                                <Button variant="outline" size="sm" title="Ver Hoja de Vida">
+                                  <ExternalLink className="h-3 w-3" />
+                                </Button>
+                              </Link>
                             </TableCell>
                           </TableRow>
                         ))}
