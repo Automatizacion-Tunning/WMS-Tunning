@@ -64,6 +64,7 @@ export interface IStorage {
   getProductSerials(productId: number, warehouseId: number): Promise<ProductSerial[]>;
   validateSerialNumber(productId: number, serialNumber: string): Promise<boolean>;
   updateSerialStatus(serialId: number, status: string): Promise<ProductSerial | undefined>;
+  updateSerialWarehouse(serialId: number, warehouseId: number, movementId: number | null): Promise<ProductSerial | undefined>;
 
   // Inventory
   getInventory(productId: number, warehouseId: number): Promise<Inventory | undefined>;
@@ -540,6 +541,7 @@ export class DatabaseStorage implements IStorage {
       purchaseOrderLine: inventoryMovements.purchaseOrderLine,
       purchaseOrderCodprod: inventoryMovements.purchaseOrderCodprod,
       dispatchGuideNumber: inventoryMovements.dispatchGuideNumber,
+      serialNumber: inventoryMovements.serialNumber,
       createdAt: inventoryMovements.createdAt,
       product: products,
       warehouse: warehouses,
@@ -723,6 +725,18 @@ export class DatabaseStorage implements IStorage {
         eq(productSerials.serialNumber, trimmed)
       ));
     return !existing; // Retorna true si NO existe (es válido)
+  }
+
+  async updateSerialWarehouse(serialId: number, warehouseId: number, movementId: number | null): Promise<ProductSerial | undefined> {
+    const updateData: any = { warehouseId, updatedAt: new Date() };
+    if (movementId !== null) {
+      updateData.movementId = movementId;
+    }
+    const [updated] = await db.update(productSerials)
+      .set(updateData)
+      .where(eq(productSerials.id, serialId))
+      .returning();
+    return updated || undefined;
   }
 
   async updateSerialStatus(serialId: number, status: string): Promise<ProductSerial | undefined> {

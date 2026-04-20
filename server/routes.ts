@@ -750,20 +750,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           outReason = reason || `Traspaso a ${destWarehouse.name}`;
         }
 
-        const outMovement = await storage.createInventoryMovement({
-          productId: item.productId,
-          warehouseId: sourceWarehouseId,
-          movementType: 'out',
-          quantity: item.quantity,
-          reason: outReason,
-          userId: req.session.userId!,
-          ...(isDespacho && dispatchGuideNumber ? { dispatchGuideNumber: dispatchGuideNumber.trim() } : {}),
-        });
-
-        let inMovement = null;
-        // Integrador: solo OUT (sin IN). Garantía y Despacho: ambos movimientos (IN + OUT)
+        let inReason: string = "";
         if (!isIntegrador) {
-          let inReason: string;
           if (isDespacho) {
             inReason = reason || `Despacho a cliente`;
           } else if (isGarantia) {
@@ -777,19 +765,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else {
             inReason = reason || `Traspaso desde ${sourceWarehouse?.name}`;
           }
+        }
 
-          inMovement = await storage.createInventoryMovement({
+        // Verificar si el producto requiere serial
+        const productInfo = await storage.getProduct(item.productId);
+        const requiresSerial = productInfo?.requiresSerial === true;
+
+        // Si tiene serial: buscar seriales disponibles en bodega origen
+        let serialsToTransfer: any[] = [];
+        if (requiresSerial) {
+          const availableSerials = await storage.getProductSerials(item.productId, sourceWarehouseId);
+          if (availableSerials.length < item.quantity) {
+            return res.status(400).json({
+              message: `No hay suficientes numeros de serie disponibles en bodega origen. Disponibles: ${availableSerials.length}, solicitados: ${item.quantity}`
+            });
+          }
+          // Tomar los primeros N seriales
+          serialsToTransfer = availableSerials.slice(0, item.quantity);
+        }
+
+        if (requiresSerial && serialsToTransfer.length > 0) {
+          // Crear movimientos individuales por cada serial
+          for (const serial of serialsToTransfer) {
+            const outMov = await storage.createInventoryMovement({
+              productId: item.productId,
+              warehouseId: sourceWarehouseId,
+              movementType: 'out',
+              quantity: 1,
+              reason: outReason,
+              userId: req.session.userId!,
+              serialNumber: serial.serialNumber,
+              ...(isDespacho && dispatchGuideNumber ? { dispatchGuideNumber: dispatchGuideNumber.trim() } : {}),
+            });
+
+            let inMov = null;
+            if (!isIntegrador) {
+              inMov = await storage.createInventoryMovement({
+                productId: item.productId,
+                warehouseId: destinationWarehouseId,
+                movementType: 'in',
+                quantity: 1,
+                reason: inReason,
+                userId: req.session.userId!,
+                serialNumber: serial.serialNumber,
+                ...(isDespacho && dispatchGuideNumber ? { dispatchGuideNumber: dispatchGuideNumber.trim() } : {}),
+              });
+
+              // Actualizar la bodega del serial (si no es integrador)
+              await storage.updateSerialWarehouse(serial.id, destinationWarehouseId, inMov?.id);
+            } else {
+              // Si es integrador: marcar serial como fuera (por ahora solo dejarlo en warehouseId destino aunque no hay IN)
+              await storage.updateSerialWarehouse(serial.id, destinationWarehouseId, null);
+            }
+
+            results.push({ productId: item.productId, serialNumber: serial.serialNumber, outMovement: outMov, inMovement: inMov });
+          }
+        } else {
+          // Sin serial: crear movimiento único con la cantidad total
+          const outMovement = await storage.createInventoryMovement({
             productId: item.productId,
-            warehouseId: destinationWarehouseId,
-            movementType: 'in',
+            warehouseId: sourceWarehouseId,
+            movementType: 'out',
             quantity: item.quantity,
-            reason: inReason,
+            reason: outReason,
             userId: req.session.userId!,
             ...(isDespacho && dispatchGuideNumber ? { dispatchGuideNumber: dispatchGuideNumber.trim() } : {}),
           });
-        }
 
-        results.push({ productId: item.productId, quantity: item.quantity, outMovement, inMovement });
+          let inMovement = null;
+          if (!isIntegrador) {
+            inMovement = await storage.createInventoryMovement({
+              productId: item.productId,
+              warehouseId: destinationWarehouseId,
+              movementType: 'in',
+              quantity: item.quantity,
+              reason: inReason,
+              userId: req.session.userId!,
+              ...(isDespacho && dispatchGuideNumber ? { dispatchGuideNumber: dispatchGuideNumber.trim() } : {}),
+            });
+          }
+
+          results.push({ productId: item.productId, quantity: item.quantity, outMovement, inMovement });
+        }
       }
 
       // Determinar tipo de respuesta
@@ -870,8 +927,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Obtener movimientos del producto
       const allMovements = await storage.getInventoryMovementsByProduct(serial.productId);
 
-      // Filtrar: solo el movimiento de ingreso de este serial
+      // Filtrar: movimientos donde el serial participa (por serialNumber O por movementId de ingreso)
       const serialMovements = allMovements.filter((m: any) => {
+        // Movimientos con serialNumber coincidente (nuevos traspasos serializados)
+        if (m.serialNumber === serial.serialNumber) return true;
+        // Movimiento de ingreso original (antes del tracking)
         if (serial.movementId && m.id === serial.movementId) return true;
         return false;
       });

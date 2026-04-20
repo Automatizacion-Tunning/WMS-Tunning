@@ -125,6 +125,7 @@ export const inventoryMovements = pgTable("inventory_movements", {
   purchaseOrderLine: integer("purchase_order_line"), // numlinea de la OC
   purchaseOrderCodprod: varchar("purchase_order_codprod", { length: 100 }), // codprod para trazabilidad
   dispatchGuideNumber: varchar("dispatch_guide_number", { length: 100 }), // Número de guía de despacho
+  serialNumber: varchar("serial_number", { length: 100 }), // Si el movimiento es de un serial especifico
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
