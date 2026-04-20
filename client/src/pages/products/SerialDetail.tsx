@@ -15,7 +15,7 @@ interface SerialVida {
 
 export default function SerialDetail() {
   const [, params] = useRoute("/serie/:productId/:serialNumber");
-  const { can, isLoading: permLoading } = usePermissions();
+  const { can, isAdmin, isLoading: permLoading } = usePermissions();
 
   const productId = params?.productId ? parseInt(params.productId) : null;
   const serialNumber = params?.serialNumber ? decodeURIComponent(params.serialNumber) : null;
@@ -117,10 +117,12 @@ export default function SerialDetail() {
             </p>
           </div>
         </div>
-        <Button onClick={handlePrintQR}>
-          <Printer className="h-4 w-4 mr-2" />
-          Imprimir QR
-        </Button>
+        {isAdmin && (
+          <Button onClick={handlePrintQR}>
+            <Printer className="h-4 w-4 mr-2" />
+            Reimprimir QR
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
