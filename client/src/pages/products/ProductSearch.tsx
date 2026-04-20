@@ -4,13 +4,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { Package, ChevronLeft, ChevronRight, Warehouse, X as XIcon } from "lucide-react";
+import { Package, ChevronLeft, ChevronRight, Warehouse, Building2 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import CompoundFilter, { type FilterField } from "@/components/filters/CompoundFilter";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { apiRequest } from "@/lib/queryClient";
 
-interface ProductWithDetails {
+interface WarehouseDistribution {
+  warehouseId: number;
+  warehouseName: string;
+  costCenter: string;
+  quantity: number;
+}
+
+interface SearchResult {
   id: number;
   name: string;
   sku: string | null;
@@ -18,11 +25,20 @@ interface ProductWithDetails {
   description: string | null;
   productType: string | null;
   requiresSerial: boolean | null;
+  erpProductCode: string | null;
   hasWarranty: boolean;
+  warrantyMonths: number | null;
   isActive: boolean | null;
   category?: { id: number; name: string } | null;
   brand?: { id: number; name: string } | null;
   unit?: { id: number; name: string; abbreviation: string } | null;
+  totalStock: number;
+  warehouseDistribution: WarehouseDistribution[];
+}
+
+interface SearchResponse {
+  rows: SearchResult[];
+  total: number;
 }
 
 interface WarehouseInfo {
@@ -30,18 +46,6 @@ interface WarehouseInfo {
   name: string;
   costCenter: string;
   warehouseType: string;
-}
-
-interface InventoryEntry {
-  warehouseId: number;
-  quantity: number;
-  warehouse?: WarehouseInfo | null;
-}
-
-interface SearchResult extends ProductWithDetails {
-  inventory?: InventoryEntry[];
-  totalStock?: number;
-  warehouseCount?: number;
 }
 
 const PAGE_SIZE = 20;
@@ -93,125 +97,76 @@ export default function ProductSearch() {
     queryKey: ["/api/warehouses"],
   });
 
-  // Extract unique cost centers from warehouses
+  // Centros de costo únicos
   const costCenters = useMemo(() => {
     const unique = Array.from(new Set(warehouses.map(w => w.costCenter).filter(Boolean)));
     return unique.sort();
   }, [warehouses]);
 
-  // Fetch all products with details
-  const { data: allProducts = [], isLoading } = useQuery<SearchResult[]>({
-    queryKey: ["/api/products/with-details"],
-    queryFn: async () => {
-      const products = await apiRequest("/api/products/with-details");
-      return products;
-    },
+  // Build query params para el endpoint backend
+  const buildParams = () => {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("pageSize", String(PAGE_SIZE));
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    if (filters.categoryId !== "all") params.set("categoryId", filters.categoryId);
+    if (filters.brandId !== "all") params.set("brandId", filters.brandId);
+    if (filters.unitId !== "all") params.set("unitId", filters.unitId);
+    if (filters.productType !== "all") params.set("productType", filters.productType);
+    if (filters.requiresSerial !== "all") params.set("requiresSerial", filters.requiresSerial);
+    if (filters.hasWarranty !== "all") params.set("hasWarranty", filters.hasWarranty);
+    if (filters.isActive !== "all") params.set("isActive", filters.isActive);
+    if (filters.warehouseId !== "all") params.set("warehouseId", filters.warehouseId);
+    if (filters.costCenter !== "all") params.set("costCenter", filters.costCenter);
+    if (filters.hasStock !== "all") params.set("hasStock", filters.hasStock);
+    return params.toString();
+  };
+
+  // Consulta al endpoint server-side (rápida, paginada)
+  const { data, isLoading, isFetching } = useQuery<SearchResponse>({
+    queryKey: [
+      "/api/products/search",
+      page, debouncedSearch,
+      filters.categoryId, filters.brandId, filters.unitId,
+      filters.productType, filters.requiresSerial, filters.hasWarranty,
+      filters.isActive, filters.warehouseId, filters.costCenter, filters.hasStock,
+    ],
+    queryFn: async () => apiRequest(`/api/products/search?${buildParams()}`),
   });
 
-  // Fetch inventory for stock info
-  const { data: inventoryData = [] } = useQuery<Array<{ productId: number; warehouseId: number; quantity: number; warehouse?: WarehouseInfo | null }>>({
-    queryKey: ["/api/inventory"],
-  });
-
-  // Merge inventory into products
-  const productsWithStock = useMemo(() => {
-    const inventoryByProduct = new Map<number, InventoryEntry[]>();
-    for (const inv of inventoryData) {
-      if (!inventoryByProduct.has(inv.productId)) {
-        inventoryByProduct.set(inv.productId, []);
-      }
-      inventoryByProduct.get(inv.productId)!.push(inv);
-    }
-
-    return allProducts.map(p => {
-      const inv = inventoryByProduct.get(p.id) || [];
-      const totalStock = inv.reduce((sum, i) => sum + (i.quantity || 0), 0);
-      return {
-        ...p,
-        inventory: inv,
-        totalStock,
-        warehouseCount: inv.filter(i => i.quantity > 0).length,
-      };
-    });
-  }, [allProducts, inventoryData]);
-
-  // Client-side filtering
-  const filteredProducts = useMemo(() => {
-    let result = productsWithStock;
-
-    if (debouncedSearch) {
-      const q = debouncedSearch.toLowerCase();
-      result = result.filter(p =>
-        p.name.toLowerCase().includes(q) ||
-        (p.sku && p.sku.toLowerCase().includes(q)) ||
-        (p.barcode && p.barcode.toLowerCase().includes(q))
-      );
-    }
-
-    if (filters.categoryId !== "all") {
-      result = result.filter(p => p.category?.id === parseInt(filters.categoryId));
-    }
-    if (filters.brandId !== "all") {
-      result = result.filter(p => p.brand?.id === parseInt(filters.brandId));
-    }
-    if (filters.unitId !== "all") {
-      result = result.filter(p => p.unit?.id === parseInt(filters.unitId));
-    }
-    if (filters.productType !== "all") {
-      result = result.filter(p => p.productType === filters.productType);
-    }
-    if (filters.requiresSerial !== "all") {
-      const val = filters.requiresSerial === "true";
-      result = result.filter(p => p.requiresSerial === val);
-    }
-    if (filters.hasWarranty !== "all") {
-      const val = filters.hasWarranty === "true";
-      result = result.filter(p => p.hasWarranty === val);
-    }
-    if (filters.isActive !== "all") {
-      const val = filters.isActive === "true";
-      result = result.filter(p => p.isActive === val);
-    }
-    if (filters.warehouseId !== "all") {
-      const wId = parseInt(filters.warehouseId);
-      result = result.filter(p => p.inventory?.some(i => i.warehouseId === wId && i.quantity > 0));
-    }
-    if (filters.costCenter !== "all") {
-      result = result.filter(p =>
-        p.inventory?.some(i => i.warehouse?.costCenter === filters.costCenter && i.quantity > 0)
-      );
-    }
-    if (filters.hasStock !== "all") {
-      if (filters.hasStock === "true") {
-        result = result.filter(p => (p.totalStock || 0) > 0);
-      } else {
-        result = result.filter(p => (p.totalStock || 0) === 0);
-      }
-    }
-
-    return result;
-  }, [productsWithStock, debouncedSearch, filters]);
-
-  // Pagination
-  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
-  const paginatedProducts = filteredProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const products = data?.rows || [];
+  const total = data?.total || 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // Filter fields
   const filterFields: FilterField[] = useMemo(() => [
-    { key: "search", label: "Buscar", type: "text", placeholder: "Buscar por nombre, SKU, barcode...", colSpan: 2 },
-    { key: "categoryId", label: "Categoria", type: "select", options: [
+    { key: "search", label: "Buscar", type: "text", placeholder: "Buscar por nombre, SKU, barcode, codigo ERP...", colSpan: 2 },
+    { key: "costCenter", label: "Centro de Costo", type: "select", options: [
+      { value: "all", label: "Todos los CC" },
+      ...costCenters.map(cc => ({ value: cc, label: cc })),
+    ]},
+    { key: "hasStock", label: "Stock", type: "select", options: [
+      { value: "all", label: "Todos" },
+      { value: "true", label: "Con stock" },
+      { value: "false", label: "Sin stock" },
+    ]},
+    // Advanced
+    { key: "categoryId", label: "Categoria", type: "select", advanced: true, options: [
       { value: "all", label: "Todas las categorias" },
       ...categories.map(c => ({ value: String(c.id), label: c.name })),
     ]},
-    { key: "brandId", label: "Marca", type: "select", options: [
+    { key: "brandId", label: "Marca", type: "select", advanced: true, options: [
       { value: "all", label: "Todas las marcas" },
       ...brands.map(b => ({ value: String(b.id), label: b.name })),
     ]},
-    { key: "unitId", label: "Unidad", type: "select", options: [
+    { key: "unitId", label: "Unidad", type: "select", advanced: true, options: [
       { value: "all", label: "Todas las unidades" },
       ...units.map(u => ({ value: String(u.id), label: `${u.name} (${u.abbreviation})` })),
     ]},
-    // Advanced
+    { key: "warehouseId", label: "Bodega", type: "select", advanced: true, options: [
+      { value: "all", label: "Todas las bodegas" },
+      ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
+    ]},
     { key: "productType", label: "Tipo", type: "select", advanced: true, options: [
       { value: "all", label: "Todos" },
       { value: "tangible", label: "Tangible" },
@@ -232,20 +187,16 @@ export default function ProductSearch() {
       { value: "true", label: "Activo" },
       { value: "false", label: "Inactivo" },
     ]},
-    { key: "warehouseId", label: "Bodega", type: "select", advanced: true, options: [
-      { value: "all", label: "Todas las bodegas" },
-      ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
-    ]},
-    { key: "costCenter", label: "Centro de Costo", type: "select", advanced: true, options: [
-      { value: "all", label: "Todos los CC" },
-      ...costCenters.map(cc => ({ value: cc, label: cc })),
-    ]},
-    { key: "hasStock", label: "Stock", type: "select", advanced: true, options: [
-      { value: "all", label: "Todos" },
-      { value: "true", label: "Con stock" },
-      { value: "false", label: "Sin stock" },
-    ]},
   ], [categories, brands, units, warehouses, costCenters]);
+
+  // Helper: obtener CCs únicos de un producto
+  const getProductCCs = (product: SearchResult): string[] => {
+    const set = new Set<string>();
+    for (const w of product.warehouseDistribution || []) {
+      if (w.quantity > 0 && w.costCenter) set.add(w.costCenter);
+    }
+    return Array.from(set).sort();
+  };
 
   return (
     <div className="space-y-6">
@@ -256,7 +207,10 @@ export default function ProductSearch() {
           Buscar Productos
         </h2>
         <p className="text-muted-foreground">
-          {filteredProducts.length} productos encontrados
+          {total.toLocaleString("es-CL")} productos encontrados
+          {isFetching && (
+            <span className="ml-2 inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-primary"></span>
+          )}
         </p>
       </div>
 
@@ -283,58 +237,84 @@ export default function ProductSearch() {
                   <th className="text-left p-3 font-medium">Marca</th>
                   <th className="text-center p-3 font-medium">Tipo</th>
                   <th className="text-right p-3 font-medium">Stock Total</th>
+                  <th className="text-left p-3 font-medium">Centros de Costo</th>
                   <th className="text-right p-3 font-medium">Bodegas</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2"></div>
                       Cargando productos...
                     </td>
                   </tr>
-                ) : paginatedProducts.length === 0 ? (
+                ) : products.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
                       No se encontraron productos
                     </td>
                   </tr>
                 ) : (
-                  paginatedProducts.map((p) => (
-                    <tr
-                      key={p.id}
-                      className="border-b hover:bg-muted/30 cursor-pointer"
-                      onClick={() => setSelectedProduct(p)}
-                    >
-                      <td className="p-3">
-                        <div className="font-medium">{p.name}</div>
-                        <span className="text-xs text-muted-foreground font-mono">{p.sku || "Sin SKU"}</span>
-                      </td>
-                      <td className="p-3">{p.category?.name || "-"}</td>
-                      <td className="p-3">{p.brand?.name || "-"}</td>
-                      <td className="p-3 text-center">
-                        <Badge variant={p.productType === "tangible" ? "default" : "secondary"} className="text-xs">
-                          {p.productType === "tangible" ? "Tangible" : "Intangible"}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-right font-mono font-semibold">
-                        {(p.totalStock || 0) > 0 ? (
-                          <span className="text-green-500">{p.totalStock}</span>
-                        ) : (
-                          <span className="text-muted-foreground">0</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-right">
-                        {(p.warehouseCount || 0) > 0 ? (
-                          <Badge variant="outline" className="text-xs">
-                            <Warehouse className="w-3 h-3 mr-1" />
-                            {p.warehouseCount}
+                  products.map((p) => {
+                    const ccs = getProductCCs(p);
+                    const warehouseCount = (p.warehouseDistribution || []).filter(w => w.quantity > 0).length;
+                    return (
+                      <tr
+                        key={p.id}
+                        className="border-b hover:bg-muted/30 cursor-pointer"
+                        onClick={() => setSelectedProduct(p)}
+                      >
+                        <td className="p-3">
+                          <div className="font-medium">{p.name}</div>
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {p.sku || p.erpProductCode || "Sin SKU"}
+                          </span>
+                        </td>
+                        <td className="p-3">{p.category?.name || "-"}</td>
+                        <td className="p-3">{p.brand?.name || "-"}</td>
+                        <td className="p-3 text-center">
+                          <Badge variant={p.productType === "tangible" ? "default" : "secondary"} className="text-xs">
+                            {p.productType === "tangible" ? "Tangible" : "Intangible"}
                           </Badge>
-                        ) : "-"}
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="p-3 text-right font-mono font-semibold">
+                          {(p.totalStock || 0) > 0 ? (
+                            <span className="text-green-500">{p.totalStock}</span>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          {ccs.length === 0 ? (
+                            <span className="text-muted-foreground text-xs">Sin stock</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {ccs.slice(0, 3).map((cc) => (
+                                <Badge key={cc} variant="outline" className="text-xs font-mono">
+                                  <Building2 className="w-3 h-3 mr-1" />
+                                  {cc}
+                                </Badge>
+                              ))}
+                              {ccs.length > 3 && (
+                                <Badge variant="outline" className="text-xs">
+                                  +{ccs.length - 3}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">
+                          {warehouseCount > 0 ? (
+                            <Badge variant="outline" className="text-xs">
+                              <Warehouse className="w-3 h-3 mr-1" />
+                              {warehouseCount}
+                            </Badge>
+                          ) : "-"}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -391,6 +371,10 @@ export default function ProductSearch() {
                     <span className="font-mono">{selectedProduct.sku || "-"}</span>
                   </div>
                   <div className="flex justify-between">
+                    <span className="text-muted-foreground">Codigo ERP</span>
+                    <span className="font-mono">{selectedProduct.erpProductCode || "-"}</span>
+                  </div>
+                  <div className="flex justify-between">
                     <span className="text-muted-foreground">Categoria</span>
                     <span>{selectedProduct.category?.name || "-"}</span>
                   </div>
@@ -416,7 +400,7 @@ export default function ProductSearch() {
                     <Warehouse className="h-4 w-4" />
                     Distribucion por Bodega
                   </h4>
-                  {(!selectedProduct.inventory || selectedProduct.inventory.length === 0) ? (
+                  {(selectedProduct.warehouseDistribution?.length ?? 0) === 0 ? (
                     <p className="text-sm text-muted-foreground">Sin stock en bodegas.</p>
                   ) : (
                     <div className="overflow-x-auto">
@@ -429,17 +413,18 @@ export default function ProductSearch() {
                           </tr>
                         </thead>
                         <tbody>
-                          {selectedProduct.inventory
-                            .filter(i => i.quantity > 0)
-                            .map((inv, idx) => (
+                          {selectedProduct.warehouseDistribution
+                            .filter(w => w.quantity > 0)
+                            .map((w, idx) => (
                             <tr key={idx} className="border-b border-muted">
-                              <td className="py-2 px-2">{inv.warehouse?.name || "-"}</td>
+                              <td className="py-2 px-2">{w.warehouseName || "-"}</td>
                               <td className="py-2 px-2">
                                 <Badge variant="outline" className="text-xs font-mono">
-                                  {inv.warehouse?.costCenter || "-"}
+                                  <Building2 className="w-3 h-3 mr-1" />
+                                  {w.costCenter || "-"}
                                 </Badge>
                               </td>
-                              <td className="py-2 px-2 text-right font-bold">{inv.quantity}</td>
+                              <td className="py-2 px-2 text-right font-bold">{w.quantity}</td>
                             </tr>
                           ))}
                         </tbody>
