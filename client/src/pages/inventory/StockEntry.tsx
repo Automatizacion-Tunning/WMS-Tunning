@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Package, ArrowUpCircle, Scan, Info, FileText } from "lucide-react";
 import SimpleProductEntryForm from "@/components/forms/SimpleProductEntryForm";
-import { printLabels } from "@/components/modals/QRLabelModal";
+import { printLabels } from "@/components/modals/QRPrintController";
+import { formatDate, formatMoney } from "@/lib/formatters";
 import type { InventoryMovementWithDetails } from "@shared/schema";
 
 export default function StockEntry() {
@@ -21,26 +22,6 @@ export default function StockEntry() {
 
   // Filtrar solo ingresos (movementType === 'in')
   const entries = movements.filter(m => m.movementType === "in");
-
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleDateString("es-CL", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return dateStr;
-    }
-  };
-
-  const formatMoney = (val: string | null) => {
-    if (!val) return "-";
-    const num = parseFloat(val);
-    return "$" + num.toLocaleString("es-CL", { minimumFractionDigits: 0 });
-  };
 
   const handleEntrySuccess = (printData?: any) => {
     setIsCreateDialogOpen(false);

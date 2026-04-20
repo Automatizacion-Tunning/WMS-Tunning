@@ -23,6 +23,7 @@ import TestBarcode from "@/pages/TestBarcode";
 import DispatchPage from "@/pages/dispatch/DispatchPage";
 import ProductDetail from "@/pages/products/ProductDetail";
 import SerialDetail from "@/pages/products/SerialDetail";
+import ProductSearch from "@/pages/products/ProductSearch";
 
 function Router() {
   const { isAuthenticated, isLoading, login } = useAuth();
@@ -53,6 +54,7 @@ function Router() {
         <Route path="/warehouses" component={WarehouseManagement} />
         <Route path="/cost-centers" component={CostCenterManagement} />
         <Route path="/traceability" component={TraceabilityView} />
+        <Route path="/products/search" component={ProductSearch} />
         <Route path="/products" component={ProductManagement} />
         <Route path="/products/management" component={ProductManagement} />
         <Route path="/products/movements" component={ProductMovements} />

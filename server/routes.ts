@@ -11,8 +11,10 @@ import {
   ocProductEntrySchema,
   userFormSchema,
   createRoleSchema, updateRoleSchema, updateRolePermissionsSchema, assignRoleSchema,
+  productFilterSchema,
   type InsertUser
 } from "@shared/schema";
+import { z } from "zod";
 import { ZodError } from "zod";
 
 // --- Middleware de autenticación ---
@@ -478,9 +480,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/products/search", requirePermission("products.view"), async (req: any, res) => {
+    try {
+      const parseResult = productFilterSchema.safeParse(req.query);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: "Invalid filters", errors: parseResult.error.flatten() });
+      }
+      const filters = parseResult.data;
+
+      // RBAC: obtener usuario desde la sesión
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      let managedWarehouses: number[] | undefined;
+      let userCostCenter: string | undefined;
+
+      if (user.role === "warehouse_operator" && user.managedWarehouses?.length) {
+        managedWarehouses = user.managedWarehouses;
+      }
+      if (user.role === "project_manager" && user.costCenter) {
+        userCostCenter = user.costCenter;
+      }
+
+      const result = await storage.searchProductsWithInventory(filters, managedWarehouses, userCostCenter);
+      res.json(result);
+    } catch (error) {
+      console.error("Error searching products:", error);
+      res.status(500).json({ message: "Failed to search products", detail: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
   app.get("/api/products/:id", requirePermission("products.view"), async (req, res) => {
     try {
-      const product = await storage.getProductWithDetails(parseInt(req.params.id));
+      const idParse = z.coerce.number().int().positive().safeParse(req.params.id);
+      if (!idParse.success) return res.status(400).json({ message: "Invalid product ID" });
+
+      const product = await storage.getProductWithDetails(idParse.data);
       if (!product) {
         return res.status(404).json({ message: "Product not found" });
       }
@@ -521,6 +558,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/products/:id", requirePermission("products.edit"), async (req, res) => {
     try {
+      const idParse = z.coerce.number().int().positive().safeParse(req.params.id);
+      if (!idParse.success) return res.status(400).json({ message: "Invalid product ID" });
+      const productId = idParse.data;
+
       const validatedData = insertProductSchema.partial().parse(req.body);
 
       if (typeof validatedData.barcode === "string" && validatedData.barcode.trim() === "") {
@@ -529,7 +570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (validatedData.barcode && validatedData.barcode.trim() !== "") {
         const existingProduct = await storage.getProductByBarcode(validatedData.barcode);
-        if (existingProduct && existingProduct.id !== parseInt(req.params.id)) {
+        if (existingProduct && existingProduct.id !== productId) {
           return res.status(409).json({
             message: "Barcode already associated with another product",
             existingProduct: {
@@ -541,7 +582,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const product = await storage.updateProduct(parseInt(req.params.id), validatedData);
+      const product = await storage.updateProduct(productId, validatedData);
       if (!product) {
         return res.status(404).json({ message: "Product not found" });
       }
@@ -556,17 +597,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/products/:id/barcode", requirePermission("products.edit"), async (req, res) => {
     try {
+      const idParse = z.coerce.number().int().positive().safeParse(req.params.id);
+      if (!idParse.success) return res.status(400).json({ message: "Invalid product ID" });
+      const productId = idParse.data;
+
       const { barcode } = req.body;
       if (!barcode) {
         return res.status(400).json({ message: "Barcode is required" });
       }
 
       const existingProduct = await storage.getProductByBarcode(barcode);
-      if (existingProduct && existingProduct.id !== parseInt(req.params.id)) {
+      if (existingProduct && existingProduct.id !== productId) {
         return res.status(409).json({ message: "Barcode already associated with another product" });
       }
 
-      const product = await storage.updateProduct(parseInt(req.params.id), { barcode });
+      const product = await storage.updateProduct(productId, { barcode });
       if (!product) {
         return res.status(404).json({ message: "Product not found" });
       }
@@ -578,7 +623,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/products/:id", requirePermission("products.delete"), async (req, res) => {
     try {
-      const success = await storage.deleteProduct(parseInt(req.params.id));
+      const idParse = z.coerce.number().int().positive().safeParse(req.params.id);
+      if (!idParse.success) return res.status(400).json({ message: "Invalid product ID" });
+
+      const success = await storage.deleteProduct(idParse.data);
       if (!success) {
         return res.status(404).json({ message: "Product not found" });
       }
@@ -881,25 +929,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Hoja de Vida del producto — todos los datos consolidados
   app.get("/api/products/:id/vida", requirePermission("products.view"), async (req, res) => {
     try {
-      const productId = parseInt(req.params.id);
-      const product = await storage.getProductWithDetails(productId);
-      if (!product) {
-        return res.status(404).json({ message: "Product not found" });
-      }
+      const idParse = z.coerce.number().int().positive().safeParse(req.params.id);
+      if (!idParse.success) return res.status(400).json({ message: "Invalid product ID" });
 
-      // Obtener datos en paralelo
-      const [inventory, movements, allSerials] = await Promise.all([
-        storage.getInventoryByProduct(productId),
-        storage.getInventoryMovementsByProduct(productId),
-        storage.getAllProductSerials(productId),
-      ]);
-
-      res.json({
-        product,
-        inventory,
-        movements,
-        serials: allSerials,
-      });
+      const result = await storage.getProductVida(idParse.data);
+      if (!result) return res.status(404).json({ message: "Product not found" });
+      res.json(result);
     } catch (error) {
       console.error("Error fetching product vida:", error);
       res.status(500).json({ message: "Failed to fetch product life sheet" });
@@ -909,52 +944,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Hoja de Vida de un serial individual
   app.get("/api/serials/:productId/:serialNumber/vida", requirePermission("products.view"), async (req, res) => {
     try {
-      const productId = parseInt(req.params.productId);
-      const serialNumber = req.params.serialNumber;
+      const productIdParse = z.coerce.number().int().positive().safeParse(req.params.productId);
+      if (!productIdParse.success) return res.status(400).json({ message: "Invalid product ID" });
+      const serialParse = z.string().min(1).safeParse(req.params.serialNumber);
+      if (!serialParse.success) return res.status(400).json({ message: "Invalid serial number" });
 
-      // Buscar el serial con su bodega, filtrado por producto
-      const serial = await storage.getSerialByProductAndNumber(productId, serialNumber);
-      if (!serial) {
-        return res.status(404).json({ message: "Serial not found" });
-      }
-
-      // Obtener producto con detalles
-      const product = await storage.getProductWithDetails(serial.productId);
-      if (!product) {
-        return res.status(404).json({ message: "Product not found" });
-      }
-
-      // Obtener movimientos del producto
-      const allMovements = await storage.getInventoryMovementsByProduct(serial.productId);
-
-      // Filtrar: movimientos donde el serial participa (por serialNumber O por movementId de ingreso)
-      const serialMovements = allMovements.filter((m: any) => {
-        // Movimientos con serialNumber coincidente (nuevos traspasos serializados)
-        if (m.serialNumber === serial.serialNumber) return true;
-        // Movimiento de ingreso original (antes del tracking)
-        if (serial.movementId && m.id === serial.movementId) return true;
-        return false;
-      });
-
-      // Obtener OC del movimiento de ingreso
-      let purchaseOrderNumber = null;
-      let costCenter = serial.warehouse?.costCenter || null;
-      if (serial.movementId) {
-        const ingressMovement = allMovements.find((m: any) => m.id === serial.movementId);
-        if (ingressMovement) {
-          purchaseOrderNumber = ingressMovement.purchaseOrderNumber;
-        }
-      }
-
-      res.json({
-        serial: {
-          ...serial,
-          purchaseOrderNumber,
-          costCenter,
-        },
-        product,
-        movements: serialMovements,
-      });
+      const result = await storage.getSerialVida(productIdParse.data, serialParse.data);
+      if (!result) return res.status(404).json({ message: "Serial not found" });
+      res.json(result);
     } catch (error) {
       console.error("Error fetching serial vida:", error);
       res.status(500).json({ message: "Failed to fetch serial life sheet" });
@@ -963,7 +960,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/inventory-movements/product/:productId", requirePermission("inventory.view"), async (req, res) => {
     try {
-      const movements = await storage.getInventoryMovementsByProduct(parseInt(req.params.productId));
+      const idParse = z.coerce.number().int().positive().safeParse(req.params.productId);
+      if (!idParse.success) return res.status(400).json({ message: "Invalid product ID" });
+
+      const movements = await storage.getInventoryMovementsByProduct(idParse.data);
       res.json(movements);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch product movements" });

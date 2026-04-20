@@ -1,18 +1,74 @@
-import { useState } from "react";
 import { useRoute } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Printer, Package, ArrowLeft, Warehouse, ArrowRightLeft, Hash, FileText, Calendar, User, MapPin } from "lucide-react";
+import { Printer, Package, ArrowLeft, Warehouse, ArrowRightLeft, Hash, FileText, Calendar, User } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
-import { printLabels } from "@/components/modals/QRLabelModal";
+import { printLabels } from "@/components/modals/QRPrintController";
+import { formatDate, formatDateShort, getUserName } from "@/lib/formatters";
+
+interface ProductWithDetails {
+  id: number;
+  name: string;
+  sku: string | null;
+  barcode: string | null;
+  description: string | null;
+  productType: string | null;
+  requiresSerial: boolean | null;
+  erpProductCode: string | null;
+  hasWarranty: boolean;
+  warrantyMonths: number | null;
+  isActive: boolean | null;
+  createdAt: string | Date;
+  updatedAt: string | Date | null;
+  category?: { id: number; name: string } | null;
+  brand?: { id: number; name: string } | null;
+  unit?: { id: number; name: string; abbreviation: string } | null;
+}
+
+interface InventoryRecord {
+  id: number;
+  productId: number;
+  warehouseId: number;
+  quantity: number;
+  updatedAt: string | Date | null;
+  warehouse?: { id: number; name: string; costCenter: string; warehouseType: string; subWarehouseType?: string | null } | null;
+}
+
+interface MovementRecord {
+  id: number;
+  productId: number;
+  warehouseId: number;
+  movementType: string;
+  quantity: number;
+  appliedPrice: string | null;
+  reason: string | null;
+  createdAt: string | Date;
+  purchaseOrderNumber: string | null;
+  transferOrderId: number | null;
+  serialNumber?: string | null;
+  dispatchGuideNumber?: string | null;
+  user?: { firstName: string | null; lastName: string | null; username: string } | null;
+  warehouse?: { id: number; name: string; costCenter: string } | null;
+}
+
+interface SerialRecord {
+  id: number;
+  productId: number;
+  warehouseId: number;
+  serialNumber: string;
+  status: string;
+  createdAt: string | Date;
+  movementId: number | null;
+  warehouse?: { id: number; name: string; costCenter: string } | null;
+}
 
 interface ProductVida {
-  product: any;
-  inventory: any[];
-  movements: any[];
-  serials: any[];
+  product: ProductWithDetails;
+  inventory: InventoryRecord[];
+  movements: MovementRecord[];
+  serials: SerialRecord[];
 }
 
 export default function ProductDetail() {
@@ -60,40 +116,19 @@ export default function ProductDetail() {
 
   const { product, inventory, movements, serials } = data;
 
-  const formatDate = (date: string | Date | null) => {
-    if (!date) return "—";
-    return new Date(date).toLocaleDateString("es-CL", {
-      year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-    });
-  };
-
-  const formatDateShort = (date: string | Date | null) => {
-    if (!date) return "—";
-    return new Date(date).toLocaleDateString("es-CL", {
-      year: "numeric", month: "short", day: "numeric",
-    });
-  };
-
-  const getUserName = (movement: any) => {
-    if (!movement.user) return "Sistema";
-    const { firstName, lastName, username } = movement.user;
-    if (firstName && lastName) return `${firstName} ${lastName}`;
-    return username || "Desconocido";
-  };
-
   const getWarrantyExpiry = () => {
-    if (!product.hasWarranty || !product.warrantyMonths) return "—";
+    if (!product.hasWarranty || !product.warrantyMonths) return "\u2014";
     const expiry = new Date(product.createdAt);
     expiry.setMonth(expiry.getMonth() + product.warrantyMonths);
     return expiry.toLocaleDateString("es-CL", { year: "numeric", month: "2-digit", day: "2-digit" });
   };
 
-  const getSerialCostCenter = (serial: any) => {
-    return serial.warehouse?.costCenter || "—";
+  const getSerialCostCenter = (serial: SerialRecord) => {
+    return serial.warehouse?.costCenter || "\u2014";
   };
 
   const handlePrintProductQR = () => {
-    const cc = inventory.length > 0 ? (inventory[0].warehouse?.costCenter || "—") : "—";
+    const cc = inventory.length > 0 ? (inventory[0].warehouse?.costCenter || "\u2014") : "\u2014";
     printLabels([{
       id: product.id,
       name: product.name,
@@ -103,7 +138,7 @@ export default function ProductDetail() {
     }]);
   };
 
-  const handlePrintSerialQR = (serial: any) => {
+  const handlePrintSerialQR = (serial: SerialRecord) => {
     printLabels([{
       id: product.id,
       name: product.name,
@@ -115,7 +150,7 @@ export default function ProductDetail() {
   };
 
   const handlePrintAllSerialsQR = () => {
-    printLabels(serials.map((s: any) => ({
+    printLabels(serials.map((s: SerialRecord) => ({
       id: product.id,
       name: product.name,
       sku: s.serialNumber,
@@ -125,7 +160,7 @@ export default function ProductDetail() {
     })));
   };
 
-  const totalStock = inventory.reduce((sum: number, inv: any) => sum + (inv.quantity || 0), 0);
+  const totalStock = inventory.reduce((sum: number, inv: InventoryRecord) => sum + (inv.quantity || 0), 0);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -138,29 +173,29 @@ export default function ProductDetail() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
               <Package className="h-8 w-8" />
-              Hoja de Vida — {product.name}
+              Hoja de Vida -- {product.name}
             </h1>
             <p className="text-muted-foreground">
-              SKU: {product.sku || "Sin SKU"} | Código: {product.barcode || "Sin código"}
+              SKU: {product.sku || "Sin SKU"} | Codigo: {product.barcode || "Sin codigo"}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Información General + Clasificación */}
+      {/* Informacion General + Clasificacion */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <Package className="h-4 w-4" /> Información General
+              <Package className="h-4 w-4" /> Informacion General
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <InfoRow label="Nombre" value={product.name} />
-            <InfoRow label="SKU" value={product.sku || "—"} />
-            <InfoRow label="Código de Barras" value={product.barcode || "—"} />
-            <InfoRow label="Código ERP" value={product.erpProductCode || "—"} />
-            <InfoRow label="Descripción" value={product.description || "Sin descripción"} />
+            <InfoRow label="SKU" value={product.sku || "\u2014"} />
+            <InfoRow label="Codigo de Barras" value={product.barcode || "\u2014"} />
+            <InfoRow label="Codigo ERP" value={product.erpProductCode || "\u2014"} />
+            <InfoRow label="Descripcion" value={product.description || "Sin descripcion"} />
             <div className="flex justify-between items-center py-1">
               <span className="text-muted-foreground">Tipo</span>
               <Badge variant={product.productType === "tangible" ? "default" : "secondary"}>
@@ -179,21 +214,21 @@ export default function ProductDetail() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="h-4 w-4" /> Clasificación
+              <FileText className="h-4 w-4" /> Clasificacion
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <InfoRow label="Unidad" value={product.unit ? `${product.unit.name} (${product.unit.abbreviation})` : "—"} />
-            <InfoRow label="Categoría" value={product.category?.name || "—"} />
-            <InfoRow label="Marca" value={product.brand?.name || "—"} />
+            <InfoRow label="Unidad" value={product.unit ? `${product.unit.name} (${product.unit.abbreviation})` : "\u2014"} />
+            <InfoRow label="Categoria" value={product.category?.name || "\u2014"} />
+            <InfoRow label="Marca" value={product.brand?.name || "\u2014"} />
             <div className="flex justify-between items-center py-1">
               <span className="text-muted-foreground">Requiere Serie</span>
               <Badge variant={product.requiresSerial ? "default" : "outline"}>
-                {product.requiresSerial ? "Sí" : "No"}
+                {product.requiresSerial ? "Si" : "No"}
               </Badge>
             </div>
             <div className="flex justify-between items-center py-1">
-              <span className="text-muted-foreground">Garantía</span>
+              <span className="text-muted-foreground">Garantia</span>
               <Badge variant={product.hasWarranty ? "default" : "outline"}>
                 {product.hasWarranty ? `${product.warrantyMonths || 0} meses` : "No"}
               </Badge>
@@ -208,8 +243,8 @@ export default function ProductDetail() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <InfoRow label="Fecha Creación" value={formatDateShort(product.createdAt)} />
-            <InfoRow label="Última Actualización" value={formatDateShort(product.updatedAt)} />
+            <InfoRow label="Fecha Creacion" value={formatDateShort(product.createdAt)} />
+            <InfoRow label="Ultima Actualizacion" value={formatDateShort(product.updatedAt)} />
             <InfoRow label="Stock Total" value={`${totalStock} unidades`} />
             <InfoRow label="Movimientos" value={`${movements.length} registros`} />
             {product.requiresSerial && (
@@ -219,11 +254,11 @@ export default function ProductDetail() {
         </Card>
       </div>
 
-      {/* Ubicación en Bodegas */}
+      {/* Ubicacion en Bodegas */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Warehouse className="h-5 w-5" /> Ubicación en Bodegas
+            <Warehouse className="h-5 w-5" /> Ubicacion en Bodegas
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -238,17 +273,17 @@ export default function ProductDetail() {
                     <th className="text-left py-2 px-3">Centro de Costo</th>
                     <th className="text-left py-2 px-3">Tipo</th>
                     <th className="text-right py-2 px-3">Cantidad</th>
-                    <th className="text-right py-2 px-3">Última Actualización</th>
+                    <th className="text-right py-2 px-3">Ultima Actualizacion</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {inventory.map((inv: any) => (
+                  {inventory.map((inv: InventoryRecord) => (
                     <tr key={inv.id} className="border-b border-muted">
-                      <td className="py-2 px-3 font-medium">{inv.warehouse?.name || "—"}</td>
-                      <td className="py-2 px-3">{inv.warehouse?.costCenter || "—"}</td>
+                      <td className="py-2 px-3 font-medium">{inv.warehouse?.name || "\u2014"}</td>
+                      <td className="py-2 px-3">{inv.warehouse?.costCenter || "\u2014"}</td>
                       <td className="py-2 px-3">
                         <Badge variant="outline" className="text-xs">
-                          {inv.warehouse?.subWarehouseType || inv.warehouse?.warehouseType || "—"}
+                          {inv.warehouse?.subWarehouseType || inv.warehouse?.warehouseType || "\u2014"}
                         </Badge>
                       </td>
                       <td className="py-2 px-3 text-right font-bold">{inv.quantity}</td>
@@ -262,13 +297,13 @@ export default function ProductDetail() {
         </CardContent>
       </Card>
 
-      {/* Números de Serie */}
+      {/* Numeros de Serie */}
       {product.requiresSerial && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span className="flex items-center gap-2">
-                <Hash className="h-5 w-5" /> Números de Serie ({serials.length})
+                <Hash className="h-5 w-5" /> Numeros de Serie ({serials.length})
               </span>
               {serials.length > 0 && (
                 <Button variant="outline" size="sm" onClick={handlePrintAllSerialsQR}>
@@ -280,13 +315,13 @@ export default function ProductDetail() {
           </CardHeader>
           <CardContent>
             {serials.length === 0 ? (
-              <p className="text-muted-foreground text-sm">Sin números de serie registrados.</p>
+              <p className="text-muted-foreground text-sm">Sin numeros de serie registrados.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-left py-2 px-3">N° Serie</th>
+                      <th className="text-left py-2 px-3">N Serie</th>
                       <th className="text-left py-2 px-3">Bodega Actual</th>
                       <th className="text-left py-2 px-3">Estado</th>
                       <th className="text-left py-2 px-3">Fecha Ingreso</th>
@@ -294,10 +329,10 @@ export default function ProductDetail() {
                     </tr>
                   </thead>
                   <tbody>
-                    {serials.map((serial: any) => (
+                    {serials.map((serial: SerialRecord) => (
                       <tr key={serial.id} className="border-b border-muted">
                         <td className="py-2 px-3 font-mono font-bold">{serial.serialNumber}</td>
-                        <td className="py-2 px-3">{serial.warehouse?.name || "—"}</td>
+                        <td className="py-2 px-3">{serial.warehouse?.name || "\u2014"}</td>
                         <td className="py-2 px-3">
                           <Badge variant={
                             serial.status === "active" ? "default" :
@@ -305,7 +340,7 @@ export default function ProductDetail() {
                           }>
                             {serial.status === "active" ? "Activo" :
                              serial.status === "sold" ? "Vendido" :
-                             serial.status === "damaged" ? "Dañado" : serial.status}
+                             serial.status === "damaged" ? "Danado" : serial.status}
                           </Badge>
                         </td>
                         <td className="py-2 px-3 text-muted-foreground">{formatDateShort(serial.createdAt)}</td>
@@ -343,14 +378,14 @@ export default function ProductDetail() {
                     <th className="text-left py-2 px-3">Tipo</th>
                     <th className="text-left py-2 px-3">Bodega</th>
                     <th className="text-right py-2 px-3">Cantidad</th>
-                    <th className="text-left py-2 px-3">Razón</th>
+                    <th className="text-left py-2 px-3">Razon</th>
                     <th className="text-left py-2 px-3">OC</th>
-                    <th className="text-left py-2 px-3">Guía Despacho</th>
+                    <th className="text-left py-2 px-3">Guia Despacho</th>
                     <th className="text-left py-2 px-3">Realizado por</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {movements.map((mov: any) => (
+                  {movements.map((mov: MovementRecord) => (
                     <tr key={mov.id} className="border-b border-muted">
                       <td className="py-2 px-3 text-muted-foreground whitespace-nowrap">{formatDate(mov.createdAt)}</td>
                       <td className="py-2 px-3">
@@ -358,20 +393,20 @@ export default function ProductDetail() {
                           {mov.movementType === "in" ? "Entrada" : "Salida"}
                         </Badge>
                       </td>
-                      <td className="py-2 px-3">{mov.warehouse?.name || "—"}</td>
+                      <td className="py-2 px-3">{mov.warehouse?.name || "\u2014"}</td>
                       <td className="py-2 px-3 text-right font-bold">{mov.quantity}</td>
                       <td className="py-2 px-3 max-w-[200px] truncate" title={mov.reason || ""}>
-                        {mov.reason || "—"}
+                        {mov.reason || "\u2014"}
                       </td>
                       <td className="py-2 px-3">
                         {mov.purchaseOrderNumber ? (
                           <span className="font-mono text-xs">{mov.purchaseOrderNumber}</span>
-                        ) : "—"}
+                        ) : "\u2014"}
                       </td>
                       <td className="py-2 px-3">
                         {mov.dispatchGuideNumber ? (
                           <span className="font-mono text-xs">{mov.dispatchGuideNumber}</span>
-                        ) : "—"}
+                        ) : "\u2014"}
                       </td>
                       <td className="py-2 px-3 flex items-center gap-1">
                         <User className="h-3 w-3 text-muted-foreground" />

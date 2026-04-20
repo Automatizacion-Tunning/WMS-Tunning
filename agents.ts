@@ -16,6 +16,7 @@
  *   npx tsx agents.ts --agent frontend-dev --task "Corregir formulario de entrada de stock"
  */
 
+import { readFileSync } from "node:fs";
 import { query, type AgentDefinition, type ResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import {
   FRONTEND_DEV_PROMPT,
@@ -89,6 +90,8 @@ function parseArgs(): { agent: string | null; task: string | null; list: boolean
       agent = args[++i];
     } else if (args[i] === "--task" && args[i + 1]) {
       task = args[++i];
+    } else if (args[i] === "--task-file" && args[i + 1]) {
+      task = readFileSync(args[++i], "utf-8");
     } else if (args[i] === "--list") {
       list = true;
     }

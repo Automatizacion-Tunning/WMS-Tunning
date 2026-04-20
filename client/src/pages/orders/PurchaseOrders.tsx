@@ -1,15 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
-import { useLocation } from "wouter";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import { Search, ChevronLeft, ChevronRight, Check, Clock, AlertCircle, Filter, X, ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, Clock, AlertCircle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { formatDateShort, formatMoney } from "@/lib/formatters";
+import CompoundFilter, { type FilterField } from "@/components/filters/CompoundFilter";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
 
 interface OrdenCompra {
   codaux: string;
@@ -49,108 +47,63 @@ interface OrdenesResponse {
 
 const PAGE_SIZE = 50;
 
-// Helper: leer filtros iniciales desde URL
-function getInitialFromUrl() {
-  if (typeof window === "undefined") return null;
-  const sp = new URLSearchParams(window.location.search);
-  return {
-    search: sp.get("search") || "",
-    filterCC: sp.get("costCenter") || "all",
-    filterEstado: sp.get("estado") || "all",
-    filterTipo: sp.get("tipoCategoria") || "suministros",
-    filterProveedor: sp.get("proveedor") || "all",
-    fechaOcDesde: sp.get("fechaOcDesde") || "",
-    fechaOcHasta: sp.get("fechaOcHasta") || "",
-    fechaEntDesde: sp.get("fechaEntDesde") || "",
-    fechaEntHasta: sp.get("fechaEntHasta") || "",
-    filterRecepcion: sp.get("recepcion") || "all",
-    page: parseInt(sp.get("page") || "1", 10),
-  };
-}
+const filterDefaults = {
+  search: "",
+  filterTipo: "suministros",
+  filterCC: "all",
+  filterEstado: "all",
+  filterProveedor: "all",
+  fechaOcDesde: "",
+  fechaOcHasta: "",
+  fechaEntDesde: "",
+  fechaEntHasta: "",
+  filterRecepcion: "all",
+};
 
 export default function PurchaseOrders() {
-  const [, navigate] = useLocation();
-  const initial = getInitialFromUrl();
-
-  const [search, setSearch] = useState(initial?.search || "");
-  const [debouncedSearch, setDebouncedSearch] = useState(initial?.search || "");
-  const [filterCC, setFilterCC] = useState(initial?.filterCC || "all");
-  const [filterEstado, setFilterEstado] = useState(initial?.filterEstado || "all");
-  const [filterTipo, setFilterTipo] = useState(initial?.filterTipo || "suministros");
-  const [page, setPage] = useState(initial?.page || 1);
-
-  // Advanced filters
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [filterProveedor, setFilterProveedor] = useState(initial?.filterProveedor || "all");
-  const [fechaOcDesde, setFechaOcDesde] = useState(initial?.fechaOcDesde || "");
-  const [fechaOcHasta, setFechaOcHasta] = useState(initial?.fechaOcHasta || "");
-  const [fechaEntDesde, setFechaEntDesde] = useState(initial?.fechaEntDesde || "");
-  const [fechaEntHasta, setFechaEntHasta] = useState(initial?.fechaEntHasta || "");
-  const [filterRecepcion, setFilterRecepcion] = useState(initial?.filterRecepcion || "all");
+  const {
+    filters, setFilter, resetFilters, page, setPage, activeCount,
+  } = useUrlFilters("/orders/purchase-order", filterDefaults, {
+    paramMap: {
+      filterCC: "costCenter",
+      filterEstado: "estado",
+      filterTipo: "tipoCategoria",
+      filterProveedor: "proveedor",
+      filterRecepcion: "recepcion",
+    },
+  });
 
   // Debounce search
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
+      setDebouncedSearch(filters.search);
     }, 400);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [filters.search]);
 
-  // Sync filters → URL query params (persistencia)
-  useEffect(() => {
-    const sp = new URLSearchParams();
-    if (debouncedSearch) sp.set("search", debouncedSearch);
-    if (filterCC !== "all") sp.set("costCenter", filterCC);
-    if (filterEstado !== "all") sp.set("estado", filterEstado);
-    if (filterTipo !== "suministros") sp.set("tipoCategoria", filterTipo);
-    if (filterProveedor !== "all") sp.set("proveedor", filterProveedor);
-    if (fechaOcDesde) sp.set("fechaOcDesde", fechaOcDesde);
-    if (fechaOcHasta) sp.set("fechaOcHasta", fechaOcHasta);
-    if (fechaEntDesde) sp.set("fechaEntDesde", fechaEntDesde);
-    if (fechaEntHasta) sp.set("fechaEntHasta", fechaEntHasta);
-    if (filterRecepcion !== "all") sp.set("recepcion", filterRecepcion);
-    if (page !== 1) sp.set("page", String(page));
-    const qs = sp.toString();
-    const newUrl = `/orders/purchase-order${qs ? `?${qs}` : ""}`;
-    if (window.location.pathname + window.location.search !== newUrl) {
-      window.history.replaceState(null, "", newUrl);
-    }
-  }, [debouncedSearch, filterCC, filterEstado, filterTipo, filterProveedor, fechaOcDesde, fechaOcHasta, fechaEntDesde, fechaEntHasta, filterRecepcion, page]);
+  // Advanced toggle (local state)
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Count active filters
-  const activeFilterCount = [
-    search !== "",
-    filterTipo !== "suministros",
-    filterCC !== "all",
-    filterEstado !== "all",
-    filterProveedor !== "all",
-    fechaOcDesde !== "",
-    fechaOcHasta !== "",
-    fechaEntDesde !== "",
-    fechaEntHasta !== "",
-    filterRecepcion !== "all",
-  ].filter(Boolean).length;
-
-  // Build query params
+  // Build query params for API
   const buildParams = useCallback(() => {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("pageSize", String(PAGE_SIZE));
     if (debouncedSearch) params.set("search", debouncedSearch);
-    if (filterCC !== "all") params.set("costCenter", filterCC);
-    if (filterEstado !== "all") params.set("estado", filterEstado);
-    if (filterTipo !== "all") params.set("tipoCategoria", filterTipo);
-    if (filterProveedor !== "all") params.set("proveedor", filterProveedor);
-    if (fechaOcDesde) params.set("fechaOcDesde", fechaOcDesde);
-    if (fechaOcHasta) params.set("fechaOcHasta", fechaOcHasta);
-    if (fechaEntDesde) params.set("fechaEntDesde", fechaEntDesde);
-    if (fechaEntHasta) params.set("fechaEntHasta", fechaEntHasta);
+    if (filters.filterCC !== "all") params.set("costCenter", filters.filterCC);
+    if (filters.filterEstado !== "all") params.set("estado", filters.filterEstado);
+    if (filters.filterTipo !== "all") params.set("tipoCategoria", filters.filterTipo);
+    if (filters.filterProveedor !== "all") params.set("proveedor", filters.filterProveedor);
+    if (filters.fechaOcDesde) params.set("fechaOcDesde", filters.fechaOcDesde);
+    if (filters.fechaOcHasta) params.set("fechaOcHasta", filters.fechaOcHasta);
+    if (filters.fechaEntDesde) params.set("fechaEntDesde", filters.fechaEntDesde);
+    if (filters.fechaEntHasta) params.set("fechaEntHasta", filters.fechaEntHasta);
     return params.toString();
-  }, [page, debouncedSearch, filterCC, filterEstado, filterTipo, filterProveedor, fechaOcDesde, fechaOcHasta, fechaEntDesde, fechaEntHasta]);
+  }, [page, debouncedSearch, filters]);
 
   const { data, isLoading, isFetching } = useQuery<OrdenesResponse>({
-    queryKey: ["/api/ordenes-compra", page, debouncedSearch, filterCC, filterEstado, filterTipo, filterProveedor, fechaOcDesde, fechaOcHasta, fechaEntDesde, fechaEntHasta],
+    queryKey: ["/api/ordenes-compra", page, debouncedSearch, filters.filterCC, filters.filterEstado, filters.filterTipo, filters.filterProveedor, filters.fechaOcDesde, filters.fechaOcHasta, filters.fechaEntDesde, filters.fechaEntHasta],
     queryFn: async () => {
       return apiRequest(`/api/ordenes-compra?${buildParams()}`);
     },
@@ -169,53 +122,49 @@ export default function PurchaseOrders() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // Apply local reception filter
-  const ordenesFiltered = filterRecepcion === "all"
+  const ordenesFiltered = filters.filterRecepcion === "all"
     ? ordenes
     : ordenes.filter(o => {
         const localReceived = o.localReceivedQuantity || 0;
         const isComplete = o.isFullyReceived || false;
         const isPartial = localReceived > 0 && !isComplete;
-        if (filterRecepcion === "completo") return isComplete;
-        if (filterRecepcion === "parcial") return isPartial;
-        if (filterRecepcion === "pendiente") return !isComplete && !isPartial;
+        if (filters.filterRecepcion === "completo") return isComplete;
+        if (filters.filterRecepcion === "parcial") return isPartial;
+        if (filters.filterRecepcion === "pendiente") return !isComplete && !isPartial;
         return true;
       });
 
-  const handleFilterCC = (val: string) => { setFilterCC(val); setPage(1); };
-  const handleFilterEstado = (val: string) => { setFilterEstado(val); setPage(1); };
-  const handleFilterTipo = (val: string) => { setFilterTipo(val); setPage(1); };
-  const handleFilterProveedor = (val: string) => { setFilterProveedor(val); setPage(1); };
-  const handleFilterRecepcion = (val: string) => { setFilterRecepcion(val); setPage(1); };
-
-  const handleClearFilters = () => {
-    setSearch("");
-    setFilterTipo("suministros");
-    setFilterCC("all");
-    setFilterEstado("all");
-    setFilterProveedor("all");
-    setFechaOcDesde("");
-    setFechaOcHasta("");
-    setFechaEntDesde("");
-    setFechaEntHasta("");
-    setFilterRecepcion("all");
-    setPage(1);
-  };
-
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return "-";
-    try {
-      return new Date(dateStr).toLocaleDateString("es-CL");
-    } catch {
-      return dateStr;
-    }
-  };
-
-  const formatMoney = (val: string | null) => {
-    if (!val) return "-";
-    const num = parseFloat(val);
-    if (isNaN(num)) return val;
-    return "$" + num.toLocaleString("es-CL", { minimumFractionDigits: 0 });
-  };
+  // Filter field definitions
+  const filterFields: FilterField[] = useMemo(() => [
+    { key: "search", label: "Buscar", type: "text", placeholder: "Buscar por OC, proveedor, producto, CC...", colSpan: 2 },
+    { key: "filterTipo", label: "Tipo", type: "select", options: [
+      { value: "all", label: "Todos los tipos" },
+      { value: "suministros", label: "Suministros" },
+      { value: "servicios", label: "Servicios" },
+    ]},
+    { key: "filterCC", label: "Centro de Costo", type: "select", options: [
+      { value: "all", label: "Todos los CC" },
+      ...costCenters.map(cc => ({ value: cc, label: cc })),
+    ]},
+    { key: "filterEstado", label: "Estado", type: "select", options: [
+      { value: "all", label: "Todos los estados" },
+      { value: "Activo", label: "Activo" },
+      { value: "Inactivo", label: "Inactivo" },
+    ]},
+    // Advanced:
+    { key: "filterProveedor", label: "Proveedor", type: "select", advanced: true, options: [
+      { value: "all", label: "Todos los proveedores" },
+      ...providers.map(p => ({ value: p.codaux, label: `${p.nomaux} (${p.codaux})` })),
+    ]},
+    { key: "fechaOc", label: "Fecha OC", type: "daterange", advanced: true, labelDesde: "Fecha OC desde", labelHasta: "Fecha OC hasta" },
+    { key: "fechaEnt", label: "Fecha Entrega", type: "daterange", advanced: true, labelDesde: "Fecha Entrega desde", labelHasta: "Fecha Entrega hasta" },
+    { key: "filterRecepcion", label: "Recepcion", type: "select", advanced: true, options: [
+      { value: "all", label: "Todos (recepcion)" },
+      { value: "completo", label: "Completo" },
+      { value: "parcial", label: "Parcial" },
+      { value: "pendiente", label: "Pendiente" },
+    ]},
+  ], [costCenters, providers]);
 
   return (
     <div className="space-y-6">
@@ -230,143 +179,15 @@ export default function PurchaseOrders() {
       </div>
 
       {/* Filtros */}
-      <Card>
-        <CardContent className="pt-6">
-          {/* Fila 1 - Filtros principales */}
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-            <div className="md:col-span-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                <Input
-                  placeholder="Buscar por OC, proveedor, producto, CC..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <Select value={filterTipo} onValueChange={handleFilterTipo}>
-              <SelectTrigger>
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los tipos</SelectItem>
-                <SelectItem value="suministros">Suministros</SelectItem>
-                <SelectItem value="servicios">Servicios</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterCC} onValueChange={handleFilterCC}>
-              <SelectTrigger>
-                <SelectValue placeholder="Centro de Costo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los CC</SelectItem>
-                {costCenters.map((cc) => (
-                  <SelectItem key={cc} value={cc}>{cc}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterEstado} onValueChange={handleFilterEstado}>
-              <SelectTrigger>
-                <SelectValue placeholder="Estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los estados</SelectItem>
-                <SelectItem value="Activo">Activo</SelectItem>
-                <SelectItem value="Inactivo">Inactivo</SelectItem>
-              </SelectContent>
-            </Select>
-            {/* Botones de filtros avanzados */}
-            <div className="flex items-center gap-2 justify-end">
-              {activeFilterCount > 0 && (
-                <Button variant="ghost" size="sm" onClick={handleClearFilters} className="text-muted-foreground">
-                  <X className="w-4 h-4 mr-1" />
-                  Limpiar
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="whitespace-nowrap"
-              >
-                <Filter className="w-4 h-4 mr-1" />
-                {showAdvanced ? "Menos filtros" : "Mas filtros"}
-                {activeFilterCount > 0 && (
-                  <Badge variant="default" className="ml-1.5 h-5 min-w-[20px] px-1.5 text-xs">
-                    {activeFilterCount}
-                  </Badge>
-                )}
-                {showAdvanced ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
-              </Button>
-            </div>
-          </div>
-
-          {/* Fila 2 - Filtros avanzados (colapsable) */}
-          <div
-            className={`grid grid-cols-1 md:grid-cols-6 gap-4 overflow-hidden transition-all duration-300 ${
-              showAdvanced ? "mt-4 max-h-[200px] opacity-100" : "max-h-0 opacity-0"
-            }`}
-          >
-            <Select value={filterProveedor} onValueChange={handleFilterProveedor}>
-              <SelectTrigger>
-                <SelectValue placeholder="Proveedor" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los proveedores</SelectItem>
-                {providers.map((p) => (
-                  <SelectItem key={p.codaux} value={p.codaux}>
-                    {p.nomaux} ({p.codaux})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Fecha OC desde</label>
-              <Input
-                type="date"
-                value={fechaOcDesde}
-                onChange={(e) => { setFechaOcDesde(e.target.value); setPage(1); }}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Fecha OC hasta</label>
-              <Input
-                type="date"
-                value={fechaOcHasta}
-                onChange={(e) => { setFechaOcHasta(e.target.value); setPage(1); }}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Fecha Entrega desde</label>
-              <Input
-                type="date"
-                value={fechaEntDesde}
-                onChange={(e) => { setFechaEntDesde(e.target.value); setPage(1); }}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Fecha Entrega hasta</label>
-              <Input
-                type="date"
-                value={fechaEntHasta}
-                onChange={(e) => { setFechaEntHasta(e.target.value); setPage(1); }}
-              />
-            </div>
-            <Select value={filterRecepcion} onValueChange={handleFilterRecepcion}>
-              <SelectTrigger>
-                <SelectValue placeholder="Estado recepcion" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos (recepcion)</SelectItem>
-                <SelectItem value="completo">Completo</SelectItem>
-                <SelectItem value="parcial">Parcial</SelectItem>
-                <SelectItem value="pendiente">Pendiente</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      <CompoundFilter
+        fields={filterFields}
+        values={filters}
+        onChange={setFilter}
+        onClear={resetFilters}
+        showAdvanced={showAdvanced}
+        onToggleAdvanced={() => setShowAdvanced(!showAdvanced)}
+        activeCount={activeCount}
+      />
 
       {/* Resumen */}
       <div className="flex items-center justify-between">
@@ -435,7 +256,7 @@ export default function PurchaseOrders() {
                           <Badge variant="outline" className="text-xs">{o.tipo || "-"}</Badge>
                         </td>
                         <td className="p-3 text-center">{o.numlinea}</td>
-                        <td className="p-3 whitespace-nowrap">{formatDate(o.fechaoc)}</td>
+                        <td className="p-3 whitespace-nowrap">{formatDateShort(o.fechaoc)}</td>
                         <td className="p-3">
                           <div className="max-w-[180px] truncate" title={o.nomaux || o.codaux}>
                             {o.nomaux || o.codaux}
@@ -483,7 +304,7 @@ export default function PurchaseOrders() {
                             {o.estado_registro || "-"}
                           </Badge>
                         </td>
-                        <td className="p-3 whitespace-nowrap">{formatDate(o.fechaent)}</td>
+                        <td className="p-3 whitespace-nowrap">{formatDateShort(o.fechaent)}</td>
                       </tr>
                     );
                   })
@@ -495,9 +316,9 @@ export default function PurchaseOrders() {
       </Card>
 
       {/* Aviso filtro de recepcion local */}
-      {filterRecepcion !== "all" && (
+      {filters.filterRecepcion !== "all" && (
         <div className="text-sm text-muted-foreground bg-muted/50 rounded-md px-4 py-2">
-          Filtro de recepcion aplicado localmente — {ordenesFiltered.length} de {ordenes.length} registros en esta pagina.
+          Filtro de recepcion aplicado localmente -- {ordenesFiltered.length} de {ordenes.length} registros en esta pagina.
         </div>
       )}
 
@@ -511,7 +332,7 @@ export default function PurchaseOrders() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={() => setPage(Math.max(1, page - 1))}
               disabled={page <= 1 || isFetching}
             >
               <ChevronLeft className="w-4 h-4" />
@@ -520,7 +341,7 @@ export default function PurchaseOrders() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => setPage(Math.min(totalPages, page + 1))}
               disabled={page >= totalPages || isFetching}
             >
               Siguiente

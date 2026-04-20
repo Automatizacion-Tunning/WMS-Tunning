@@ -20,7 +20,20 @@ import {
   type DashboardOcStatus, type DashboardWarehouseDistribution
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc, sql, inArray, count } from "drizzle-orm";
+import { eq, and, desc, asc, sql, inArray, count, or, ilike, sum, type SQL } from "drizzle-orm";
+import type { ProductFilter } from "@shared/schema";
+
+const SERIAL_WITH_WAREHOUSE_SELECT = {
+  id: productSerials.id,
+  productId: productSerials.productId,
+  warehouseId: productSerials.warehouseId,
+  serialNumber: productSerials.serialNumber,
+  status: productSerials.status,
+  createdAt: productSerials.createdAt,
+  updatedAt: productSerials.updatedAt,
+  movementId: productSerials.movementId,
+  warehouse: warehouses,
+};
 
 export interface IStorage {
   // Users
@@ -165,6 +178,13 @@ export interface IStorage {
   getPurchaseOrdersByCostCenter(costCenter: string): Promise<any[]>;
   getProductsByCostCenter(costCenter: string): Promise<any[]>;
   getProductDetailByCostCenter(costCenter: string, productId: number): Promise<any | null>;
+
+  // Product search with inventory
+  searchProductsWithInventory(filters: ProductFilter, managedWarehouses?: number[], userCostCenter?: string): Promise<{ rows: any[], total: number }>;
+
+  // Hoja de Vida
+  getProductVida(productId: number): Promise<{ product: any, inventory: any[], movements: any[], serials: any[] } | null>;
+  getSerialVida(productId: number, serialNumber: string): Promise<{ serial: any, product: any, movements: any[] } | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -648,17 +668,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSerialByNumber(serialNumber: string): Promise<any | undefined> {
-    const result = await db.select({
-      id: productSerials.id,
-      productId: productSerials.productId,
-      warehouseId: productSerials.warehouseId,
-      serialNumber: productSerials.serialNumber,
-      status: productSerials.status,
-      createdAt: productSerials.createdAt,
-      updatedAt: productSerials.updatedAt,
-      movementId: productSerials.movementId,
-      warehouse: warehouses,
-    })
+    const result = await db.select(SERIAL_WITH_WAREHOUSE_SELECT)
     .from(productSerials)
     .innerJoin(warehouses, eq(productSerials.warehouseId, warehouses.id))
     .where(eq(productSerials.serialNumber, serialNumber))
@@ -667,17 +677,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSerialByProductAndNumber(productId: number, serialNumber: string): Promise<any | undefined> {
-    const result = await db.select({
-      id: productSerials.id,
-      productId: productSerials.productId,
-      warehouseId: productSerials.warehouseId,
-      serialNumber: productSerials.serialNumber,
-      status: productSerials.status,
-      createdAt: productSerials.createdAt,
-      updatedAt: productSerials.updatedAt,
-      movementId: productSerials.movementId,
-      warehouse: warehouses,
-    })
+    const result = await db.select(SERIAL_WITH_WAREHOUSE_SELECT)
     .from(productSerials)
     .innerJoin(warehouses, eq(productSerials.warehouseId, warehouses.id))
     .where(and(
@@ -689,17 +689,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllProductSerials(productId: number): Promise<any[]> {
-    const result = await db.select({
-      id: productSerials.id,
-      productId: productSerials.productId,
-      warehouseId: productSerials.warehouseId,
-      serialNumber: productSerials.serialNumber,
-      status: productSerials.status,
-      createdAt: productSerials.createdAt,
-      updatedAt: productSerials.updatedAt,
-      movementId: productSerials.movementId,
-      warehouse: warehouses,
-    })
+    const result = await db.select(SERIAL_WITH_WAREHOUSE_SELECT)
     .from(productSerials)
     .innerJoin(warehouses, eq(productSerials.warehouseId, warehouses.id))
     .where(eq(productSerials.productId, productId))
@@ -1801,6 +1791,285 @@ export class DatabaseStorage implements IStorage {
       warehouseDistribution,
       purchaseOrders,
       serials: product.requiresSerial ? serials : undefined,
+    };
+  }
+
+  async searchProductsWithInventory(filters: ProductFilter, managedWarehouses?: number[], userCostCenter?: string): Promise<{ rows: any[], total: number }> {
+    const conditions: SQL[] = [];
+
+    if (filters.search) {
+      const term = `%${filters.search}%`;
+      conditions.push(or(
+        ilike(products.name, term),
+        ilike(products.sku, term),
+        ilike(products.barcode, term),
+        ilike(products.erpProductCode, term),
+        ilike(products.description, term),
+      )!);
+    }
+    if (filters.categoryId) conditions.push(eq(products.categoryId, filters.categoryId));
+    if (filters.brandId) conditions.push(eq(products.brandId, filters.brandId));
+    if (filters.unitId) conditions.push(eq(products.unitId, filters.unitId));
+    if (filters.productType) conditions.push(eq(products.productType, filters.productType));
+    if (filters.requiresSerial !== undefined) conditions.push(eq(products.requiresSerial, filters.requiresSerial));
+    if (filters.hasWarranty !== undefined) conditions.push(eq(products.hasWarranty, filters.hasWarranty));
+    if (filters.isActive !== undefined) conditions.push(eq(products.isActive, filters.isActive));
+
+    // Determine if we need inventory/warehouse joins
+    const needsInventoryJoin = !!(filters.warehouseId || filters.costCenter || filters.hasStock !== undefined || managedWarehouses || userCostCenter);
+
+    // RBAC constraints on inventory/warehouses
+    const inventoryConditions: SQL[] = [];
+    if (managedWarehouses && managedWarehouses.length > 0) {
+      inventoryConditions.push(inArray(inventory.warehouseId, managedWarehouses));
+    }
+    if (userCostCenter) {
+      inventoryConditions.push(eq(warehouses.costCenter, userCostCenter));
+    }
+    if (filters.warehouseId) {
+      inventoryConditions.push(eq(inventory.warehouseId, filters.warehouseId));
+    }
+    if (filters.costCenter) {
+      inventoryConditions.push(eq(warehouses.costCenter, filters.costCenter));
+    }
+
+    // Build the base query for product IDs with filtering
+    // We use a subquery approach: first get matching product IDs, then fetch details
+
+    if (needsInventoryJoin) {
+      // When we need inventory joins, we must join through inventory+warehouses to filter
+      // hasStock filter needs special handling
+      if (filters.hasStock === true) {
+        inventoryConditions.push(sql`${inventory.quantity} > 0`);
+      }
+
+      // Count total matching products
+      const countQuery = db
+        .selectDistinct({ id: products.id })
+        .from(products)
+        .innerJoin(inventory, eq(products.id, inventory.productId))
+        .innerJoin(warehouses, eq(inventory.warehouseId, warehouses.id))
+        .where(and(...conditions, ...inventoryConditions));
+
+      const countResult = await db.select({ total: count() }).from(countQuery.as("sub"));
+      const total = countResult[0]?.total ?? 0;
+
+      if (total === 0) return { rows: [], total: 0 };
+
+      // Get paginated product IDs
+      const offset = (filters.page - 1) * filters.pageSize;
+      const productIdsQuery = await db
+        .selectDistinct({ id: products.id, name: products.name })
+        .from(products)
+        .innerJoin(inventory, eq(products.id, inventory.productId))
+        .innerJoin(warehouses, eq(inventory.warehouseId, warehouses.id))
+        .where(and(...conditions, ...inventoryConditions))
+        .orderBy(asc(products.name))
+        .offset(offset)
+        .limit(filters.pageSize);
+
+      const productIds = productIdsQuery.map(r => r.id);
+      if (productIds.length === 0) return { rows: [], total };
+
+      // Fetch product details
+      const productRows = await db
+        .select({
+          id: products.id,
+          name: products.name,
+          sku: products.sku,
+          barcode: products.barcode,
+          description: products.description,
+          productType: products.productType,
+          requiresSerial: products.requiresSerial,
+          erpProductCode: products.erpProductCode,
+          hasWarranty: products.hasWarranty,
+          warrantyMonths: products.warrantyMonths,
+          isActive: products.isActive,
+          createdAt: products.createdAt,
+          category: categories,
+          brand: brands,
+          unit: units,
+        })
+        .from(products)
+        .innerJoin(categories, eq(products.categoryId, categories.id))
+        .innerJoin(brands, eq(products.brandId, brands.id))
+        .innerJoin(units, eq(products.unitId, units.id))
+        .where(inArray(products.id, productIds))
+        .orderBy(asc(products.name));
+
+      // Fetch warehouse distribution for these products
+      const distRows = await db
+        .select({
+          productId: inventory.productId,
+          warehouseId: inventory.warehouseId,
+          warehouseName: warehouses.name,
+          costCenter: warehouses.costCenter,
+          quantity: inventory.quantity,
+        })
+        .from(inventory)
+        .innerJoin(warehouses, eq(inventory.warehouseId, warehouses.id))
+        .where(and(
+          inArray(inventory.productId, productIds),
+          sql`${inventory.quantity} > 0`,
+        ));
+
+      // Group distribution by product
+      const distMap = new Map<number, { warehouseId: number, warehouseName: string, costCenter: string, quantity: number }[]>();
+      const stockMap = new Map<number, number>();
+      for (const row of distRows) {
+        const list = distMap.get(row.productId) || [];
+        list.push({
+          warehouseId: row.warehouseId,
+          warehouseName: row.warehouseName,
+          costCenter: row.costCenter,
+          quantity: row.quantity,
+        });
+        distMap.set(row.productId, list);
+        stockMap.set(row.productId, (stockMap.get(row.productId) || 0) + row.quantity);
+      }
+
+      const rows = productRows.map(p => ({
+        ...p,
+        totalStock: stockMap.get(p.id) || 0,
+        warehouseDistribution: distMap.get(p.id) || [],
+      }));
+
+      return { rows, total };
+    } else {
+      // No inventory join needed - simpler query
+      // Handle hasStock=false: products with NO inventory at all
+      if (filters.hasStock === false) {
+        const subq = db.select({ productId: inventory.productId }).from(inventory).where(sql`${inventory.quantity} > 0`);
+        conditions.push(sql`${products.id} NOT IN (${subq})`);
+      }
+
+      const countResult = await db.select({ total: count() }).from(products).where(conditions.length > 0 ? and(...conditions) : undefined);
+      const total = countResult[0]?.total ?? 0;
+      if (total === 0) return { rows: [], total: 0 };
+
+      const offset = (filters.page - 1) * filters.pageSize;
+      const productRows = await db
+        .select({
+          id: products.id,
+          name: products.name,
+          sku: products.sku,
+          barcode: products.barcode,
+          description: products.description,
+          productType: products.productType,
+          requiresSerial: products.requiresSerial,
+          erpProductCode: products.erpProductCode,
+          hasWarranty: products.hasWarranty,
+          warrantyMonths: products.warrantyMonths,
+          isActive: products.isActive,
+          createdAt: products.createdAt,
+          category: categories,
+          brand: brands,
+          unit: units,
+        })
+        .from(products)
+        .innerJoin(categories, eq(products.categoryId, categories.id))
+        .innerJoin(brands, eq(products.brandId, brands.id))
+        .innerJoin(units, eq(products.unitId, units.id))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(asc(products.name))
+        .offset(offset)
+        .limit(filters.pageSize);
+
+      const productIds = productRows.map(r => r.id);
+      if (productIds.length === 0) return { rows: [], total };
+
+      // Fetch warehouse distribution
+      const distRows = await db
+        .select({
+          productId: inventory.productId,
+          warehouseId: inventory.warehouseId,
+          warehouseName: warehouses.name,
+          costCenter: warehouses.costCenter,
+          quantity: inventory.quantity,
+        })
+        .from(inventory)
+        .innerJoin(warehouses, eq(inventory.warehouseId, warehouses.id))
+        .where(and(
+          inArray(inventory.productId, productIds),
+          sql`${inventory.quantity} > 0`,
+        ));
+
+      const distMap = new Map<number, { warehouseId: number, warehouseName: string, costCenter: string, quantity: number }[]>();
+      const stockMap = new Map<number, number>();
+      for (const row of distRows) {
+        const list = distMap.get(row.productId) || [];
+        list.push({
+          warehouseId: row.warehouseId,
+          warehouseName: row.warehouseName,
+          costCenter: row.costCenter,
+          quantity: row.quantity,
+        });
+        distMap.set(row.productId, list);
+        stockMap.set(row.productId, (stockMap.get(row.productId) || 0) + row.quantity);
+      }
+
+      const rows = productRows.map(p => ({
+        ...p,
+        totalStock: stockMap.get(p.id) || 0,
+        warehouseDistribution: distMap.get(p.id) || [],
+      }));
+
+      return { rows, total };
+    }
+  }
+
+  async getProductVida(productId: number): Promise<{ product: any, inventory: any[], movements: any[], serials: any[] } | null> {
+    const product = await this.getProductWithDetails(productId);
+    if (!product) return null;
+
+    const [inv, movements, allSerials] = await Promise.all([
+      this.getInventoryByProduct(productId),
+      this.getInventoryMovementsByProduct(productId),
+      this.getAllProductSerials(productId),
+    ]);
+
+    return {
+      product,
+      inventory: inv,
+      movements,
+      serials: allSerials,
+    };
+  }
+
+  async getSerialVida(productId: number, serialNumber: string): Promise<{ serial: any, product: any, movements: any[] } | null> {
+    const serial = await this.getSerialByProductAndNumber(productId, serialNumber);
+    if (!serial) return null;
+
+    const product = await this.getProductWithDetails(serial.productId);
+    if (!product) return null;
+
+    const allMovements = await this.getInventoryMovementsByProduct(serial.productId);
+
+    // Filter movements where serial participates
+    const serialMovements = allMovements.filter((m: any) => {
+      if (m.serialNumber === serial.serialNumber) return true;
+      if (serial.movementId && m.id === serial.movementId) return true;
+      return false;
+    });
+
+    // Get purchase order from ingress movement
+    let purchaseOrderNumber = null;
+    let costCenter = serial.warehouse?.costCenter || null;
+    if (serial.movementId) {
+      const ingressMovement = allMovements.find((m: any) => m.id === serial.movementId);
+      if (ingressMovement) {
+        purchaseOrderNumber = ingressMovement.purchaseOrderNumber;
+      }
+    }
+
+    return {
+      serial: {
+        ...serial,
+        purchaseOrderNumber,
+        costCenter,
+      },
+      product,
+      movements: serialMovements,
     };
   }
 }

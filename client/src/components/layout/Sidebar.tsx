@@ -16,7 +16,8 @@ import {
   Menu,
   ShieldAlert,
   GitBranch,
-  Truck
+  Truck,
+  Search
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,7 @@ function SidebarContent() {
 
   const productNav: NavItem[] = [];
   if (can("products.view")) productNav.push({ name: "Gestión", href: "/products", icon: Package });
+  if (can("products.view")) productNav.push({ name: "Buscar Productos", href: "/products/search", icon: Search });
   if (can("products.view")) productNav.push({ name: "Traspaso de Bodega", href: "/products/movements", icon: PlusCircle });
 
   const inventoryNav: NavItem[] = [];

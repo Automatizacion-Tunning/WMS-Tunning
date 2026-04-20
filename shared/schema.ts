@@ -658,3 +658,21 @@ export const updateRolePermissionsSchema = z.object({
 export const assignRoleSchema = z.object({
   roleCode: z.string().min(1),
 });
+
+export const productFilterSchema = z.object({
+  search: z.string().optional(),
+  categoryId: z.coerce.number().int().positive().optional(),
+  brandId: z.coerce.number().int().positive().optional(),
+  unitId: z.coerce.number().int().positive().optional(),
+  productType: z.enum(["tangible", "intangible"]).optional(),
+  requiresSerial: z.enum(["true", "false"]).transform(v => v === "true").optional(),
+  hasWarranty: z.enum(["true", "false"]).transform(v => v === "true").optional(),
+  isActive: z.enum(["true", "false"]).transform(v => v === "true").optional(),
+  warehouseId: z.coerce.number().int().positive().optional(),
+  costCenter: z.string().optional(),
+  hasStock: z.enum(["true", "false"]).transform(v => v === "true").optional(),
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(20),
+});
+
+export type ProductFilter = z.infer<typeof productFilterSchema>;

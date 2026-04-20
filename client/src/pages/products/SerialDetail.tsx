@@ -3,14 +3,63 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Package, ArrowLeft, Warehouse, ArrowRightLeft, Hash, FileText, Calendar, User, Printer } from "lucide-react";
+import { Package, ArrowLeft, Warehouse, ArrowRightLeft, Hash, FileText, User, Printer } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
-import { printLabels } from "@/components/modals/QRLabelModal";
+import { printLabels } from "@/components/modals/QRPrintController";
+import { formatDate, formatDateShort, getUserName } from "@/lib/formatters";
+
+interface ProductWithDetails {
+  id: number;
+  name: string;
+  sku: string | null;
+  barcode: string | null;
+  description: string | null;
+  productType: string | null;
+  requiresSerial: boolean | null;
+  erpProductCode: string | null;
+  hasWarranty: boolean;
+  warrantyMonths: number | null;
+  isActive: boolean | null;
+  createdAt: string | Date;
+  updatedAt: string | Date | null;
+  category?: { id: number; name: string } | null;
+  brand?: { id: number; name: string } | null;
+  unit?: { id: number; name: string; abbreviation: string } | null;
+}
+
+interface MovementRecord {
+  id: number;
+  productId: number;
+  warehouseId: number;
+  movementType: string;
+  quantity: number;
+  appliedPrice: string | null;
+  reason: string | null;
+  createdAt: string | Date;
+  purchaseOrderNumber: string | null;
+  transferOrderId: number | null;
+  serialNumber?: string | null;
+  user?: { firstName: string | null; lastName: string | null; username: string } | null;
+  warehouse?: { id: number; name: string; costCenter: string } | null;
+}
+
+interface SerialRecord {
+  id: number;
+  productId: number;
+  warehouseId: number;
+  serialNumber: string;
+  status: string;
+  createdAt: string | Date;
+  movementId: number | null;
+  purchaseOrderNumber?: string | null;
+  costCenter?: string | null;
+  warehouse?: { id: number; name: string; costCenter: string; warehouseType?: string; subWarehouseType?: string | null } | null;
+}
 
 interface SerialVida {
-  serial: any;
-  product: any;
-  movements: any[];
+  serial: SerialRecord;
+  product: ProductWithDetails;
+  movements: MovementRecord[];
 }
 
 export default function SerialDetail() {
@@ -50,7 +99,7 @@ export default function SerialDetail() {
       <div className="container mx-auto p-6">
         <Card>
           <CardContent className="p-8 text-center">
-            <p className="text-lg text-muted-foreground">Número de serie no encontrado.</p>
+            <p className="text-lg text-muted-foreground">Numero de serie no encontrado.</p>
           </CardContent>
         </Card>
       </div>
@@ -59,29 +108,8 @@ export default function SerialDetail() {
 
   const { serial, product, movements } = data;
 
-  const formatDate = (date: string | Date | null) => {
-    if (!date) return "—";
-    return new Date(date).toLocaleDateString("es-CL", {
-      year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-    });
-  };
-
-  const formatDateShort = (date: string | Date | null) => {
-    if (!date) return "—";
-    return new Date(date).toLocaleDateString("es-CL", {
-      year: "numeric", month: "short", day: "numeric",
-    });
-  };
-
-  const getUserName = (movement: any) => {
-    if (!movement.user) return "Sistema";
-    const { firstName, lastName, username } = movement.user;
-    if (firstName && lastName) return `${firstName} ${lastName}`;
-    return username || "Desconocido";
-  };
-
   const getWarrantyExpiry = () => {
-    if (!product.hasWarranty || !product.warrantyMonths) return "—";
+    if (!product.hasWarranty || !product.warrantyMonths) return "\u2014";
     const baseDate = serial.createdAt ? new Date(serial.createdAt) : new Date(product.createdAt);
     baseDate.setMonth(baseDate.getMonth() + product.warrantyMonths);
     return baseDate.toLocaleDateString("es-CL", { year: "numeric", month: "2-digit", day: "2-digit" });
@@ -93,8 +121,8 @@ export default function SerialDetail() {
       name: product.name,
       sku: serial.serialNumber,
       serialNumber: serial.serialNumber,
-      costCenter: serial.costCenter || serial.warehouse?.costCenter || "—",
-      purchaseOrder: serial.purchaseOrderNumber || "—",
+      costCenter: serial.costCenter || serial.warehouse?.costCenter || "\u2014",
+      purchaseOrder: serial.purchaseOrderNumber || "\u2014",
       warrantyExpiry: getWarrantyExpiry(),
     }]);
   };
@@ -110,7 +138,7 @@ export default function SerialDetail() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
               <Hash className="h-8 w-8" />
-              Hoja de Vida — S/N: {serial.serialNumber}
+              Hoja de Vida -- S/N: {serial.serialNumber}
             </h1>
             <p className="text-muted-foreground">
               {product.name} | SKU: {product.sku || "Sin SKU"}
@@ -130,11 +158,11 @@ export default function SerialDetail() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <Hash className="h-4 w-4" /> Número de Serie
+              <Hash className="h-4 w-4" /> Numero de Serie
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <InfoRow label="N° Serie" value={serial.serialNumber} />
+            <InfoRow label="N Serie" value={serial.serialNumber} />
             <div className="flex justify-between items-center py-1">
               <span className="text-muted-foreground">Estado</span>
               <Badge variant={
@@ -143,24 +171,24 @@ export default function SerialDetail() {
               }>
                 {serial.status === "active" ? "Activo" :
                  serial.status === "sold" ? "Vendido" :
-                 serial.status === "damaged" ? "Dañado" : serial.status}
+                 serial.status === "damaged" ? "Danado" : serial.status}
               </Badge>
             </div>
             <InfoRow label="Fecha Ingreso" value={formatDateShort(serial.createdAt)} />
           </CardContent>
         </Card>
 
-        {/* Ubicación */}
+        {/* Ubicacion */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <Warehouse className="h-4 w-4" /> Ubicación Actual
+              <Warehouse className="h-4 w-4" /> Ubicacion Actual
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <InfoRow label="Bodega" value={serial.warehouse?.name || "—"} />
-            <InfoRow label="Centro de Costo" value={serial.costCenter || serial.warehouse?.costCenter || "—"} />
-            <InfoRow label="Tipo Bodega" value={serial.warehouse?.subWarehouseType || serial.warehouse?.warehouseType || "—"} />
+            <InfoRow label="Bodega" value={serial.warehouse?.name || "\u2014"} />
+            <InfoRow label="Centro de Costo" value={serial.costCenter || serial.warehouse?.costCenter || "\u2014"} />
+            <InfoRow label="Tipo Bodega" value={serial.warehouse?.subWarehouseType || serial.warehouse?.warehouseType || "\u2014"} />
           </CardContent>
         </Card>
 
@@ -172,8 +200,8 @@ export default function SerialDetail() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <InfoRow label="Orden de Compra" value={serial.purchaseOrderNumber || "—"} />
-            <InfoRow label="Garantía" value={product.hasWarranty ? `${product.warrantyMonths} meses` : "Sin garantía"} />
+            <InfoRow label="Orden de Compra" value={serial.purchaseOrderNumber || "\u2014"} />
+            <InfoRow label="Garantia" value={product.hasWarranty ? `${product.warrantyMonths} meses` : "Sin garantia"} />
             {product.hasWarranty && (
               <InfoRow label="Vence" value={getWarrantyExpiry()} />
             )}
@@ -191,12 +219,12 @@ export default function SerialDetail() {
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 text-sm">
             <InfoRow label="Nombre" value={product.name} />
-            <InfoRow label="SKU" value={product.sku || "—"} />
-            <InfoRow label="Código de Barras" value={product.barcode || "—"} />
-            <InfoRow label="Código ERP" value={product.erpProductCode || "—"} />
-            <InfoRow label="Unidad" value={product.unit ? `${product.unit.name} (${product.unit.abbreviation})` : "—"} />
-            <InfoRow label="Categoría" value={product.category?.name || "—"} />
-            <InfoRow label="Marca" value={product.brand?.name || "—"} />
+            <InfoRow label="SKU" value={product.sku || "\u2014"} />
+            <InfoRow label="Codigo de Barras" value={product.barcode || "\u2014"} />
+            <InfoRow label="Codigo ERP" value={product.erpProductCode || "\u2014"} />
+            <InfoRow label="Unidad" value={product.unit ? `${product.unit.name} (${product.unit.abbreviation})` : "\u2014"} />
+            <InfoRow label="Categoria" value={product.category?.name || "\u2014"} />
+            <InfoRow label="Marca" value={product.brand?.name || "\u2014"} />
             <div className="flex justify-between items-center py-1">
               <span className="text-muted-foreground">Tipo</span>
               <Badge variant={product.productType === "tangible" ? "default" : "secondary"}>
@@ -226,13 +254,13 @@ export default function SerialDetail() {
                     <th className="text-left py-2 px-3">Tipo</th>
                     <th className="text-left py-2 px-3">Bodega</th>
                     <th className="text-right py-2 px-3">Cantidad</th>
-                    <th className="text-left py-2 px-3">Razón</th>
+                    <th className="text-left py-2 px-3">Razon</th>
                     <th className="text-left py-2 px-3">OC</th>
                     <th className="text-left py-2 px-3">Realizado por</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {movements.map((mov: any) => (
+                  {movements.map((mov: MovementRecord) => (
                     <tr key={mov.id} className="border-b border-muted">
                       <td className="py-2 px-3 text-muted-foreground whitespace-nowrap">{formatDate(mov.createdAt)}</td>
                       <td className="py-2 px-3">
@@ -240,15 +268,15 @@ export default function SerialDetail() {
                           {mov.movementType === "in" ? "Entrada" : "Salida"}
                         </Badge>
                       </td>
-                      <td className="py-2 px-3">{mov.warehouse?.name || "—"}</td>
+                      <td className="py-2 px-3">{mov.warehouse?.name || "\u2014"}</td>
                       <td className="py-2 px-3 text-right font-bold">{mov.quantity}</td>
                       <td className="py-2 px-3 max-w-[200px] truncate" title={mov.reason || ""}>
-                        {mov.reason || "—"}
+                        {mov.reason || "\u2014"}
                       </td>
                       <td className="py-2 px-3">
                         {mov.purchaseOrderNumber ? (
                           <span className="font-mono text-xs">{mov.purchaseOrderNumber}</span>
-                        ) : "—"}
+                        ) : "\u2014"}
                       </td>
                       <td className="py-2 px-3 flex items-center gap-1">
                         <User className="h-3 w-3 text-muted-foreground" />

@@ -1,9 +1,8 @@
-import { useEffect, useRef } from "react";
 import ReactDOMServer from "react-dom/server";
 import { QRCodeSVG } from "qrcode.react";
 import React from "react";
 
-interface QRProduct {
+export interface QRProduct {
   id: number;
   name: string;
   sku: string | null;
@@ -13,14 +12,7 @@ interface QRProduct {
   warrantyExpiry?: string;
 }
 
-interface QRLabelModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  products: QRProduct[];
-  autoPrint?: boolean;
-}
-
-// Tamaño fijo: 62x62mm — rollo continuo 62mm
+// Tamano fijo: 62x62mm -- rollo continuo 62mm
 const LABEL = {
   width: "62mm",
   height: "62mm",
@@ -33,7 +25,7 @@ function generateQRSvg(url: string): string {
   );
 }
 
-function printLabels(products: QRProduct[]) {
+export function printLabels(products: QRProduct[]) {
   const printWindow = window.open("", "_blank", "width=400,height=600");
   if (!printWindow) return;
 
@@ -47,10 +39,10 @@ function printLabels(products: QRProduct[]) {
       <div class="qr-label">
         <div class="qr-svg">${qrSvg}</div>
         <table>
-          <tr><td class="lbl">S/N</td><td>${p.serialNumber || p.sku || "—"}</td></tr>
-          <tr><td class="lbl">CC</td><td>${p.costCenter || "—"}</td></tr>
-          <tr><td class="lbl">OC</td><td>${p.purchaseOrder || "—"}</td></tr>
-          <tr><td class="lbl">Gtia</td><td>${p.warrantyExpiry || "—"}</td></tr>
+          <tr><td class="lbl">S/N</td><td>${p.serialNumber || p.sku || "\u2014"}</td></tr>
+          <tr><td class="lbl">CC</td><td>${p.costCenter || "\u2014"}</td></tr>
+          <tr><td class="lbl">OC</td><td>${p.purchaseOrder || "\u2014"}</td></tr>
+          <tr><td class="lbl">Gtia</td><td>${p.warrantyExpiry || "\u2014"}</td></tr>
         </table>
       </div>
     `;
@@ -112,32 +104,11 @@ function printLabels(products: QRProduct[]) {
   `);
   printWindow.document.close();
 
-  // SVG no necesita esperar carga — imprimir directo
+  // SVG no necesita esperar carga -- imprimir directo
   setTimeout(() => {
     printWindow.print();
     setTimeout(() => printWindow.close(), 1000);
   }, 200);
 }
 
-export { printLabels };
-export type { QRProduct };
-
-export default function QRLabelModal({ isOpen, onClose, products }: QRLabelModalProps) {
-  const hasPrinted = useRef(false);
-
-  useEffect(() => {
-    if (isOpen && products.length > 0 && !hasPrinted.current) {
-      hasPrinted.current = true;
-      const timer = setTimeout(() => {
-        printLabels(products);
-        onClose();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-    if (!isOpen) {
-      hasPrinted.current = false;
-    }
-  }, [isOpen, products, onClose]);
-
-  return null;
-}
+export default printLabels;
