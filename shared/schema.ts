@@ -141,11 +141,25 @@ export const purchaseOrderReceipts = pgTable("purchase_order_receipts", {
   unitPrice: decimal("unit_price", { precision: 12, scale: 2 }),
   costCenter: varchar("cost_center", { length: 100 }),
   lastMovementId: integer("last_movement_id"),
+  supplierCode: varchar("supplier_code", { length: 50 }),
+  supplierName: varchar("supplier_name", { length: 200 }),
+  deliveryDate: timestamp("delivery_date"),
+  warehouseReceptionDate: timestamp("warehouse_reception_date"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   uniqueOcLine: unique().on(table.purchaseOrderNumber, table.purchaseOrderLine),
 }));
+
+// Tabla genérica de configuración key/value para parámetros del sistema
+export const appSettings = pgTable("app_settings", {
+  id: serial("id").primaryKey(),
+  key: varchar("key", { length: 100 }).notNull().unique(),
+  value: text("value").notNull(),
+  description: text("description"),
+  updatedBy: integer("updated_by"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
 
 // RBAC: Tabla de roles
 export const roles = pgTable("roles", {
@@ -428,6 +442,16 @@ export const insertPurchaseOrderReceiptSchema = createInsertSchema(purchaseOrder
   updatedAt: true,
 });
 
+export const insertAppSettingSchema = createInsertSchema(appSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export const updateAppSettingSchema = z.object({
+  value: z.string(),
+  description: z.string().optional(),
+});
+
 export const insertRoleSchema = createInsertSchema(roles).omit({
   id: true,
   createdAt: true,
@@ -482,6 +506,10 @@ export type InsertBrand = z.infer<typeof insertBrandSchema>;
 
 export type PurchaseOrderReceipt = typeof purchaseOrderReceipts.$inferSelect;
 export type InsertPurchaseOrderReceipt = z.infer<typeof insertPurchaseOrderReceiptSchema>;
+
+export type AppSetting = typeof appSettings.$inferSelect;
+export type InsertAppSetting = z.infer<typeof insertAppSettingSchema>;
+export type UpdateAppSetting = z.infer<typeof updateAppSettingSchema>;
 
 export type Role = typeof roles.$inferSelect;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
