@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { parseHttpStatus } from "@/lib/httpError";
 import type { User } from "@shared/schema";
 
 export function useAuth() {
@@ -19,7 +20,7 @@ export function useAuth() {
           setIsAuthenticated(true);
           localStorage.setItem("currentUser", JSON.stringify(user));
         } catch (err) {
-          if (err instanceof Error && err.message.startsWith("401")) {
+          if (parseHttpStatus(err) === 401) {
             localStorage.removeItem("currentUser");
             setCurrentUser(null);
             setIsAuthenticated(false);
@@ -39,6 +40,9 @@ export function useAuth() {
     setIsAuthenticated(true);
     localStorage.setItem("currentUser", JSON.stringify(user));
     setError(null);
+    // Invalidar queries cacheadas de una sesion anterior para evitar
+    // mostrar data filtrada con permisos incorrectos.
+    queryClient.invalidateQueries();
   };
 
   const logout = async () => {
@@ -47,11 +51,14 @@ export function useAuth() {
     } catch (error) {
       // Si hay error, continuar con el logout local
     }
-    
+
     setCurrentUser(null);
     setIsAuthenticated(false);
     localStorage.removeItem("currentUser");
     setError(null);
+    // Limpiar cache de React Query antes de recargar para que ningun
+    // componente que se renderice entre medio acceda a datos privados.
+    queryClient.clear();
 
     // Recargar la página para limpiar completamente el estado
     window.location.reload();

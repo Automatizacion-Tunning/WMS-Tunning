@@ -16,6 +16,7 @@ import { Plus, Building2, MapPin, ChevronRight, ChevronDown, Package, FileText, 
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { parseHttpStatus } from "@/lib/httpError";
 import { z } from "zod";
 import type { Warehouse } from "@shared/schema";
 
@@ -450,7 +451,7 @@ function ProductsTab({ costCenter, onProductClick }: { costCenter: string; onPro
 function WarehouseProductsPanel({ warehouseId, onProductClick }: { warehouseId: number; onProductClick: (productId: number) => void }) {
   const [filter, setFilter] = useState("");
 
-  const { data, isLoading } = useQuery<any[]>({
+  const { data, isLoading, isError, error } = useQuery<any[]>({
     queryKey: [`/api/inventory/warehouse/${warehouseId}/details`],
   });
 
@@ -461,6 +462,15 @@ function WarehouseProductsPanel({ warehouseId, onProductClick }: { warehouseId: 
         Cargando productos...
       </div>
     );
+  }
+
+  if (isError) {
+    const status = parseHttpStatus(error);
+    const msg =
+      status === 403 ? "No tiene acceso a los productos de esta bodega."
+      : status === 404 ? "Bodega no encontrada."
+      : "Error al cargar los productos de esta bodega.";
+    return <p className="text-red-400 py-3 text-sm" role="alert">{msg}</p>;
   }
 
   if (!data || data.length === 0) {

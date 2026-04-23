@@ -38,6 +38,7 @@ Al comenzar cualquier conversacion en este proyecto:
 | bodegas | Bodegas jerarquicas, centros de costo, bodega principal |
 | traspasos | Ordenes de traspaso entre bodegas |
 | ordenes-compra | Recepcion de OC, integracion ERP Tunning |
+| kpi-proveedores | Monitoreo de fechas de entrega, semaforo, fecha modificacion, fecha recepcion bodega, KPI de cumplimiento por proveedor y parametros configurables |
 | usuarios | Gestion de usuarios y permisos individuales |
 | roles | Roles RBAC y matriz de permisos |
 

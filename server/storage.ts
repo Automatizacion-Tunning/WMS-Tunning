@@ -52,7 +52,7 @@ export interface IStorage {
 
   // Warehouses
   getWarehouse(id: number): Promise<Warehouse | undefined>;
-  getAllWarehouses(): Promise<Warehouse[]>;
+  getAllWarehouses(allowedCostCenters?: string[]): Promise<Warehouse[]>;
   createWarehouse(warehouse: InsertWarehouse): Promise<Warehouse>;
   updateWarehouse(id: number, warehouse: Partial<InsertWarehouse>): Promise<Warehouse | undefined>;
   deleteWarehouse(id: number): Promise<boolean>;
@@ -280,9 +280,16 @@ export class DatabaseStorage implements IStorage {
     return warehouse || undefined;
   }
 
-  async getAllWarehouses(): Promise<Warehouse[]> {
+  async getAllWarehouses(allowedCostCenters?: string[]): Promise<Warehouse[]> {
+    // Scope: undefined = admin (todas); [] = sin acceso; string[] = filtro por CC
+    if (allowedCostCenters !== undefined && allowedCostCenters.length === 0) {
+      return [];
+    }
+    const whereClause = allowedCostCenters !== undefined
+      ? and(eq(warehouses.isActive, true), inArray(warehouses.costCenter, allowedCostCenters))
+      : eq(warehouses.isActive, true);
     return await db.select().from(warehouses)
-      .where(eq(warehouses.isActive, true))
+      .where(whereClause)
       .orderBy(asc(warehouses.name));
   }
 
@@ -823,13 +830,21 @@ export class DatabaseStorage implements IStorage {
   // Warehouse values: SUM(inventory.quantity * latest price) per warehouse
   // Uses current month price if available, otherwise falls back to most recent price
   // Excludes dispatch warehouses (subWarehouseType = 'despacho') from value calculation
-  async getWarehouseValues(): Promise<{ warehouseId: number; warehouseValue: number }[]> {
+  // Scope: undefined = admin (todas); [] = sin acceso; string[] = filtro por CC
+  async getWarehouseValues(allowedCostCenters?: string[]): Promise<{ warehouseId: number; warehouseValue: number }[]> {
+    if (allowedCostCenters !== undefined && allowedCostCenters.length === 0) {
+      return [];
+    }
+    const costCenterFilter = allowedCostCenters !== undefined
+      ? sql`AND w.cost_center = ANY(${allowedCostCenters})`
+      : sql``;
     const results = await db.execute(sql`
       SELECT i.warehouse_id as "warehouseId",
              coalesce(sum(i.quantity * coalesce(pp.price, 0)), 0) as "warehouseValue"
       FROM inventory i
       INNER JOIN warehouses w ON w.id = i.warehouse_id
         AND (w.sub_warehouse_type IS NULL OR w.sub_warehouse_type != 'despacho')
+        ${costCenterFilter}
       LEFT JOIN LATERAL (
         SELECT price FROM product_prices
         WHERE product_id = i.product_id

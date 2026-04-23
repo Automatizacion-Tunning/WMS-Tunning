@@ -161,6 +161,41 @@ export const appSettings = pgTable("app_settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Log inmutable de cambios sobre items de OC (fechas, proveedor, cantidad cuando se alimenta KPI)
+export const receiptAuditLog = pgTable("receipt_audit_log", {
+  id: serial("id").primaryKey(),
+  receiptId: integer("receipt_id").notNull(),
+  field: varchar("field", { length: 64 }).notNull(),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  changedBy: integer("changed_by"),
+  changedAt: timestamp("changed_at").defaultNow().notNull(),
+  source: varchar("source", { length: 32 }).notNull(),
+  reason: text("reason"),
+});
+
+// Log inmutable de cambios sobre appSettings (especialmente umbral KPI)
+export const settingsAuditLog = pgTable("settings_audit_log", {
+  id: serial("id").primaryKey(),
+  settingKey: varchar("setting_key", { length: 100 }).notNull(),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  changedBy: integer("changed_by"),
+  changedAt: timestamp("changed_at").defaultNow().notNull(),
+  reason: text("reason"),
+});
+
+// Versionado del umbral de OC atrasadas por proveedor (permite reportes históricos estables)
+export const kpiThresholdHistory = pgTable("kpi_threshold_history", {
+  id: serial("id").primaryKey(),
+  metricKey: varchar("metric_key", { length: 100 }).notNull(),
+  threshold: integer("threshold").notNull(),
+  effectiveFrom: timestamp("effective_from").notNull(),
+  setBy: integer("set_by"),
+  setAt: timestamp("set_at").defaultNow().notNull(),
+  reason: text("reason"),
+});
+
 // RBAC: Tabla de roles
 export const roles = pgTable("roles", {
   id: serial("id").primaryKey(),
@@ -458,6 +493,39 @@ export const insertRoleSchema = createInsertSchema(roles).omit({
   updatedAt: true,
 });
 
+export const insertReceiptAuditLogSchema = createInsertSchema(receiptAuditLog).omit({
+  id: true,
+  changedAt: true,
+});
+
+export const insertSettingsAuditLogSchema = createInsertSchema(settingsAuditLog).omit({
+  id: true,
+  changedAt: true,
+});
+
+export const insertKpiThresholdHistorySchema = createInsertSchema(kpiThresholdHistory).omit({
+  id: true,
+  setAt: true,
+});
+
+export const updateReceiptFieldSchema = z.object({
+  warehouseReceptionDate: z.string().datetime({ offset: true }),
+  reason: z.string().min(3, "Motivo mínimo 3 caracteres").max(500),
+  expectedUpdatedAt: z.string().datetime({ offset: true }).optional(),
+});
+
+export const updateKpiConfigSchema = z.object({
+  key: z.string().min(1).max(100),
+  value: z.string().min(1).regex(/^\d+$/, "Debe ser numérico"),
+  reason: z.string().min(3).max(500).optional(),
+}).refine(
+  (data) => {
+    const n = Number(data.value);
+    return n > 0 && n <= 365;
+  },
+  { message: "Valor debe estar entre 1 y 365", path: ["value"] }
+);
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -514,6 +582,18 @@ export type UpdateAppSetting = z.infer<typeof updateAppSettingSchema>;
 export type Role = typeof roles.$inferSelect;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
 export type Permission = typeof permissions.$inferSelect;
+
+export type ReceiptAuditLog = typeof receiptAuditLog.$inferSelect;
+export type InsertReceiptAuditLog = z.infer<typeof insertReceiptAuditLogSchema>;
+
+export type SettingsAuditLog = typeof settingsAuditLog.$inferSelect;
+export type InsertSettingsAuditLog = z.infer<typeof insertSettingsAuditLogSchema>;
+
+export type KpiThresholdHistory = typeof kpiThresholdHistory.$inferSelect;
+export type InsertKpiThresholdHistory = z.infer<typeof insertKpiThresholdHistorySchema>;
+
+export type UpdateReceiptField = z.infer<typeof updateReceiptFieldSchema>;
+export type UpdateKpiConfig = z.infer<typeof updateKpiConfigSchema>;
 
 export type RoleWithPermissions = Role & {
   permissions: Permission[];

@@ -216,9 +216,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // WAREHOUSE ROUTES (requiere autenticación)
   // ============================================================
 
-  app.get("/api/warehouses", requirePermission("warehouses.view"), async (req, res) => {
+  app.get("/api/warehouses", requirePermission("warehouses.view"), async (req: any, res) => {
     try {
-      const warehouses = await storage.getAllWarehouses();
+      const allowed = await getAllowedCostCenters(req.session.userId);
+      const warehouses = await storage.getAllWarehouses(allowed);
       res.json(warehouses);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch warehouses" });
@@ -228,7 +229,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/warehouse-values — value of each warehouse based on current month prices
   app.get("/api/warehouse-values", requirePermission("warehouses.view"), async (req: any, res) => {
     try {
-      const values = await storage.getWarehouseValues();
+      const allowed = await getAllowedCostCenters(req.session.userId);
+      const values = await storage.getWarehouseValues(allowed);
       res.json(values);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch warehouse values" });
@@ -238,7 +240,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/warehouse-values/recalculate — recalculate all cost center total values
   app.post("/api/warehouse-values/recalculate", requirePermission("warehouses.view"), async (req: any, res) => {
     try {
-      const allWarehouses = await storage.getAllWarehouses();
+      const allowed = await getAllowedCostCenters(req.session.userId);
+      const allWarehouses = await storage.getAllWarehouses(allowed);
       const mainWarehouses = allWarehouses.filter(w => w.warehouseType === "main");
       for (const wh of mainWarehouses) {
         await storage.updateCostCenterTotalValue(wh.id);
@@ -342,6 +345,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { costCenter } = req.params;
       const allowed = await getAllowedCostCenters(req.session.userId);
       if (Array.isArray(allowed) && !allowed.includes(costCenter)) {
+        console.warn("[AUTHZ]", {
+          event: "authz.forbidden",
+          userId: req.session.userId,
+          route: "/api/warehouses/by-cost-center/:costCenter",
+          requestedCc: costCenter,
+          allowedCount: allowed.length,
+        });
         return res.status(403).json({ message: "No tiene acceso a este centro de costo" });
       }
       const warehousesData = await storage.getWarehousesByCostCenter(costCenter);
@@ -363,6 +373,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const allowed = await getAllowedCostCenters(req.session.userId);
       if (Array.isArray(allowed) && !allowed.includes(warehouse.costCenter)) {
+        console.warn("[AUTHZ]", {
+          event: "authz.forbidden",
+          userId: req.session.userId,
+          route: "/api/inventory/warehouse/:warehouseId/details",
+          warehouseId,
+          requestedCc: warehouse.costCenter,
+          allowedCount: allowed.length,
+        });
         return res.status(403).json({ message: "No tiene acceso a esta bodega" });
       }
 
@@ -1214,8 +1232,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // PRINCIPAL WAREHOUSE ROUTES (requiere autenticación)
   // ============================================================
 
-  app.get("/api/principal-warehouse/:costCenter", requirePermission("warehouses.view"), async (req, res) => {
+  app.get("/api/principal-warehouse/:costCenter", requirePermission("warehouses.view"), async (req: any, res) => {
     try {
+      const allowed = await getAllowedCostCenters(req.session.userId);
+      if (Array.isArray(allowed) && !allowed.includes(req.params.costCenter)) {
+        console.warn("[AUTHZ]", {
+          event: "authz.forbidden",
+          userId: req.session.userId,
+          route: "/api/principal-warehouse/:costCenter",
+          requestedCc: req.params.costCenter,
+          allowedCount: allowed.length,
+        });
+        return res.status(403).json({ message: "No tiene acceso a este centro de costo" });
+      }
       const warehouse = await storage.getPrincipalWarehouse(req.params.costCenter);
       if (!warehouse) {
         return res.status(404).json({ message: "Principal warehouse not found for this cost center" });
