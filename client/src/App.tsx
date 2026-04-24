@@ -24,6 +24,7 @@ import DispatchPage from "@/pages/dispatch/DispatchPage";
 import ProductDetail from "@/pages/products/ProductDetail";
 import SerialDetail from "@/pages/products/SerialDetail";
 import ProductSearch from "@/pages/products/ProductSearch";
+import ProjectReport from "@/pages/informes/ProjectReport";
 
 function Router() {
   const { isAuthenticated, isLoading, login } = useAuth();
@@ -67,6 +68,7 @@ function Router() {
         <Route path="/producto/:id" component={ProductDetail} />
         <Route path="/serie/:productId/:serialNumber" component={SerialDetail} />
         <Route path="/test-barcode" component={TestBarcode} />
+        <Route path="/informes/proyecto" component={ProjectReport} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

@@ -49,6 +49,18 @@ const loginLimiter = rateLimit({
 });
 app.use("/api/auth/login", loginLimiter);
 
+// --- Rate limiting para Informes (JSON + export) ---
+// Generar un informe agrega varias queries SQL a la BD; un PM no deberia descargar
+// mas de unos pocos por minuto. 30 hits / 5 min cubre el uso real con holgura.
+const reportsLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Demasiadas solicitudes de informes, intente más tarde" },
+});
+app.use("/api/informes/", reportsLimiter);
+
 // Permite a Express conocer el esquema original cuando está detrás de un proxy
 app.set("trust proxy", 1);
 

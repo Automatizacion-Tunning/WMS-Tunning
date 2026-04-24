@@ -77,6 +77,9 @@ function SidebarContent() {
   if (canAny(["orders.view_purchase", "orders.entry_oc"])) ordersNav.push({ name: "Ingreso Orden de Compra", href: "/orders/purchase-order", icon: FileText });
   if (canAny(["orders.view_transfers", "orders.create_transfers"])) ordersNav.push({ name: "Órdenes de Traspaso", href: "/orders/transfer-orders", icon: RefreshCcw });
 
+  const reportsNav: NavItem[] = [];
+  if (can("reports.view")) reportsNav.push({ name: "Por Proyecto", href: "/informes/proyecto", icon: FileText });
+
   const adminNav: NavItem[] = [];
   if (canAny(["users.view", "users.manage"])) adminNav.push({ name: "Gestión de Usuarios", href: "/users", icon: Users });
   if (canAny(["roles.view", "roles.manage"])) adminNav.push({ name: "Gestión de Roles", href: "/roles", icon: Shield });
@@ -157,6 +160,7 @@ function SidebarContent() {
             {renderSection("Productos", productNav)}
             {renderSection("Inventario", inventoryNav)}
             {renderSection("Órdenes", ordersNav)}
+            {renderSection("Informes", reportsNav)}
             {renderSection("Administración", adminNav)}
           </>
         )}

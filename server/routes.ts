@@ -3,6 +3,12 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { hashPassword, comparePassword, isPlaintextPassword, isSha256Hash } from "./auth";
 import { requirePermission, getUserPermissions, clearUserCache, clearAllCache } from "./authorization";
+import { getAllowedCostCenters, userCanAccessCostCenter } from "./cost-center-access";
+import { generateProjectReport, generateProjectReportCached } from "./reports";
+import { exportReportToXlsx, exportReportToPdf } from "./report-exporters";
+import { logReportGeneration } from "./report-audit";
+import { featureFlags } from "./featureFlags";
+import { costCenterParamSchema, exportFormatSchema, REPORT_VERSION } from "@shared/contracts/reports";
 import {
   insertUserSchema, insertWarehouseSchema, insertProductSchema,
   insertInventoryMovementSchema, insertTransferOrderSchema,
@@ -127,19 +133,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Helper: obtener CCs permitidos segun rol del usuario
-  async function getAllowedCostCenters(userId: number): Promise<string[] | undefined> {
-    const user = await storage.getUser(userId);
-    if (!user) return [];
-    // Admin: sin filtro (undefined = todos)
-    if (user.role === 'admin') return undefined;
-    // PM, operator, viewer: derivar de managedWarehouses o fallback a costCenter
-    if (user.managedWarehouses?.length) {
-      return await storage.getCostCentersByWarehouses(user.managedWarehouses);
-    }
-    if (user.costCenter) return [user.costCenter];
-    return [];
-  }
+  // Nota: getAllowedCostCenters fue movido a server/cost-center-access.ts
+  // y se importa al inicio del archivo. La firma se mantiene identica.
 
   app.get("/api/dashboard/available-cost-centers", requirePermission("dashboard.view"), async (req: any, res) => {
     try {
@@ -2143,6 +2138,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Error al asignar rol" });
     }
   });
+
+  // ============================================================
+  // INFORMES CONSOLIDADOS POR PROYECTO (CC)
+  // Permiso: reports.view (admin + project_manager)
+  // ============================================================
+
+  app.get(
+    "/api/informes/proyecto/:costCenter",
+    requirePermission("reports.view"),
+    async (req: any, res) => {
+      if (!featureFlags.reports) {
+        return res.status(404).json({ message: "Modulo de informes deshabilitado" });
+      }
+      const t0 = Date.now();
+      try {
+        const cc = costCenterParamSchema.parse(req.params.costCenter);
+
+        const allowed = await getAllowedCostCenters(req.session.userId);
+        if (!userCanAccessCostCenter(allowed, cc)) {
+          return res.status(403).json({ message: "No tiene acceso a este centro de costo" });
+        }
+
+        const noCache = String(req.headers["cache-control"] ?? "").includes("no-cache");
+        const report = noCache
+          ? await generateProjectReport(cc, req.session.userId)
+          : await generateProjectReportCached(cc, req.session.userId);
+
+        void logReportGeneration({
+          userId: req.session.userId,
+          costCenter: cc,
+          format: "json",
+          durationMs: Date.now() - t0,
+          productsCount: report.products.length,
+          reportVersion: REPORT_VERSION,
+          ip: req.ip,
+          userAgent: req.headers["user-agent"] ?? null,
+        });
+
+        res.json(report);
+      } catch (error: any) {
+        if (error instanceof ZodError) {
+          return res.status(400).json({ message: "Parametro costCenter invalido", errors: error.errors });
+        }
+        if (error?.status === 404) {
+          return res.status(404).json({ message: error.message });
+        }
+        console.error("[GET /api/informes/proyecto/:costCenter] Error:", error);
+        res.status(500).json({ message: "Error generando informe" });
+      }
+    }
+  );
+
+  app.get(
+    "/api/informes/proyecto/:costCenter/export",
+    requirePermission("reports.view"),
+    async (req: any, res) => {
+      if (!featureFlags.reports) {
+        return res.status(404).json({ message: "Modulo de informes deshabilitado" });
+      }
+      const t0 = Date.now();
+      try {
+        const cc = costCenterParamSchema.parse(req.params.costCenter);
+        const format = exportFormatSchema.parse(req.query.format);
+
+        const allowed = await getAllowedCostCenters(req.session.userId);
+        if (!userCanAccessCostCenter(allowed, cc)) {
+          return res.status(403).json({ message: "No tiene acceso a este centro de costo" });
+        }
+
+        // Reusa la version cacheada (mismo dataset que el JSON)
+        const report = await generateProjectReportCached(cc, req.session.userId);
+
+        const stamp = new Date()
+          .toISOString()
+          .replace(/[-:T]/g, "")
+          .slice(0, 13); // yyyymmddThhmm
+        const filenameSafeCc = cc.replace(/[^A-Za-z0-9_-]/g, "_");
+
+        let buffer: Buffer;
+        let contentType: string;
+        let ext: string;
+        if (format === "xlsx") {
+          buffer = await exportReportToXlsx(report);
+          contentType =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+          ext = "xlsx";
+        } else {
+          buffer = await exportReportToPdf(report);
+          contentType = "application/pdf";
+          ext = "pdf";
+        }
+
+        const filename = `informe-${filenameSafeCc}-${stamp}.${ext}`;
+        res.setHeader("Content-Type", contentType);
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.setHeader("Content-Length", String(buffer.length));
+
+        void logReportGeneration({
+          userId: req.session.userId,
+          costCenter: cc,
+          format,
+          durationMs: Date.now() - t0,
+          productsCount: report.products.length,
+          reportVersion: REPORT_VERSION,
+          ip: req.ip,
+          userAgent: req.headers["user-agent"] ?? null,
+        });
+
+        res.end(buffer);
+      } catch (error: any) {
+        if (error instanceof ZodError) {
+          return res.status(400).json({ message: "Parametros invalidos", errors: error.errors });
+        }
+        if (error?.status === 404) {
+          return res.status(404).json({ message: error.message });
+        }
+        console.error("[GET /api/informes/proyecto/:cc/export] Error:", error);
+        res.status(500).json({ message: "Error exportando informe" });
+      }
+    }
+  );
 
   const httpServer = createServer(app);
   return httpServer;
